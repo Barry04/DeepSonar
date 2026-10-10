@@ -1,6 +1,6 @@
 /**
  * Scheduler 收敛并发回归：
- * 1. review/test 同时 finalize 时恰好创建一轮 Verify；
+ * 1. 合格 review/test 同时 finalize 时恰好确认一轮；不完整安全证据仍保持 pending；
  * 2. Hub 已 complete 后以 failed/timeout/orphan 终态退出，仍会自动派 Report。
  *
  * 直接使用独立 DB 事务，避免依赖 Dispatcher 调度时序。CI 在启动 Scheduler 前执行。
@@ -57,7 +57,9 @@ async function insertJob(
   return job as DbRow;
 }
 
-async function testConcurrentReverify(): Promise<void> {
+type MissingRequirement = "independent_review" | "impact_flow" | "attempted_refutation" | "qualified_test_artifact_refs";
+
+async function testConcurrentReverify(missing?: MissingRequirement): Promise<void> {
   const canvasId = await createCanvas("active");
   const origin = await insertJob(canvasId, "audit", "succeeded");
   const [findingNode] = await sql`
@@ -66,10 +68,15 @@ async function testConcurrentReverify(): Promise<void> {
     RETURNING id`;
   const [finding] = await sql`
     INSERT INTO findings (
-      project_id, job_id, node_id, fingerprint, title, severity, summary, verify_status
+      project_id, job_id, node_id, fingerprint, title, severity, summary, verify_status, profile, raw_json
     ) VALUES (
       ${projectId}, ${origin.id as string}, ${findingNode.id as string},
-      ${`concurrent-${tag}`}, '并发补证 Finding', 'high', '并发收口测试', 'pending'
+      ${`concurrent-${missing ?? "qualified"}-${tag}`}, '并发补证 Finding', 'high', '并发收口测试', 'pending',
+      'security.vulnerability', ${sql.json(missing === "impact_flow" ? {} : { impact: {
+        attacker_entry: "Authenticated cross-user record request",
+        victim_resource: "Another user's private record",
+        impact_flow: "Attacker-supplied record ID reaches victim data without an ownership check",
+      } })}
     ) RETURNING id`;
 
   const followup = {
@@ -80,9 +87,9 @@ async function testConcurrentReverify(): Promise<void> {
   };
   const review = await insertJob(canvasId, "review", "running", followup);
   const test = await insertJob(canvasId, "test", "running", followup);
-  // Verify eligibility is evidence-driven: completed followups must leave
-  // attributable Fact nodes, otherwise the scheduler correctly keeps the
-  // round in waiting_evidence and no Verify job is runnable.
+  // Security confirmation composes Fact-first, an independent structured pair,
+  // impact, attempted refutation and retained test artifact references. The
+  // negative cases remove one requirement without weakening the Finding profile.
   await sql`
     INSERT INTO canvas_nodes (canvas_id, job_id, node_type, title, status, body_json, verification_status)
     VALUES
@@ -93,6 +100,11 @@ async function testConcurrentReverify(): Promise<void> {
             finding_id: finding.id as string,
             evidence_kind: "review",
             outcome: "supports",
+            ...(missing === "independent_review" ? {} : {
+              subject_revision: "convergence-fixture-revision",
+              expected: "Cross-user requests are denied by the ownership check",
+              actual: "The request handler reaches victim data without checking ownership",
+            }),
           },
         })}, 'unverified'
       ),
@@ -104,9 +116,15 @@ async function testConcurrentReverify(): Promise<void> {
             evidence_kind: "test",
             outcome: "supports",
             subject_revision: "convergence-fixture-revision",
-            steps: ["run fixture test"],
-            expected: "pass",
-            actual: "pass",
+            steps: ["Request another user's record with an authenticated fixture account"],
+            expected: "403 Forbidden",
+            actual: "200 OK with the other user's record",
+            ...(missing === "attempted_refutation" ? {} : {
+              attempted_refutation: ["Unauthenticated control returned 401; switching between two authenticated owners still exposed the other owner's record"],
+            }),
+            ...(missing === "qualified_test_artifact_refs" ? {} : {
+              artifact_refs: [{ uri: "shared://scheduler-convergence/cross-user-response.log", sha256: "ab".repeat(32) }],
+            }),
           },
         })}, 'unverified'
       )`;
@@ -142,12 +160,29 @@ async function testConcurrentReverify(): Promise<void> {
     SELECT id, status FROM jobs
     WHERE finding_id = ${finding.id as string} AND type = 'verify_finding'`;
   const rounds = await sql`
-    SELECT id, attempt, status, final_outcome FROM finding_verification_rounds WHERE finding_id = ${finding.id as string}`;
+    SELECT id, attempt, status, final_outcome, requirements_json, evidence_snapshot_json
+    FROM finding_verification_rounds WHERE finding_id = ${finding.id as string}`;
   const [confirmed] = await sql`
     SELECT verify_status FROM findings WHERE id = ${finding.id as string}`;
   assert(verifyJobs.length === 0, `Fact-first 门禁通过后不应再派 verify_finding，实际 ${verifyJobs.length}`);
   assert(rounds.length === 1, `并发补证后 round 数量应为 1，实际 ${rounds.length}`);
-  assert(rounds[0]?.status === "confirmed" && rounds[0]?.final_outcome === "confirmed", "并发补证后应只确认一轮");
+  if (missing) {
+    const round = rounds[0];
+    const requirements = round.requirements_json as Record<string, unknown>;
+    const snapshot = round.evidence_snapshot_json as Record<string, unknown>;
+    const strategy = snapshot.strategy as Record<string, unknown>;
+    const requiredMissing = requirements.required_missing as string[];
+    assert(round.status === "pending" && round.final_outcome === null,
+      `${missing}: incomplete security evidence must remain pending: ${JSON.stringify(round)}`);
+    assert(requiredMissing.includes(missing), `${missing}: missing requirements ${JSON.stringify(requiredMissing)}`);
+    assert((strategy.gate as Record<string, unknown>).ok === true,
+      `${missing}: fixture must pass the inner Fact-first gate`);
+    assert(strategy.ok === false, `${missing}: the complete security gate must fail closed`);
+    assert(confirmed?.verify_status === "pending", `${missing}: Finding must not be confirmed`);
+    return;
+  }
+  assert(rounds[0]?.status === "confirmed" && rounds[0]?.final_outcome === "confirmed",
+    `并发补证后应只确认一轮: ${JSON.stringify(rounds)}`);
   assert(confirmed?.verify_status === "confirmed", `并发补证后 Finding 应为 confirmed，实际 ${String(confirmed?.verify_status)}`);
 }
 
@@ -212,10 +247,13 @@ try {
   projectId = project.id as string;
 
   await testConcurrentReverify();
+  for (const missing of ["independent_review", "impact_flow", "attempted_refutation", "qualified_test_artifact_refs"] as const) {
+    await testConcurrentReverify(missing);
+  }
   await testTerminalReportRecovery("failed");
   await testTerminalReportRecovery("timeout");
   await testTerminalReportRecovery("orphan");
-  console.log(JSON.stringify({ concurrent_reverify: "ok", terminal_report_recovery: ["failed", "timeout", "orphan"] }));
+  console.log(JSON.stringify({ concurrent_reverify: "ok", incomplete_security_evidence: "blocked", terminal_report_recovery: ["failed", "timeout", "orphan"] }));
 } finally {
   await cleanup();
   await sql.end();
