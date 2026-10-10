@@ -1,12 +1,15 @@
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-10
+
 ### 新增
 
 - Provider 账号并发可观测与配置面收口（#707 Phase 2）：凭据列表/详情返回与 dispatcher claim 同口径的 `active_concurrency`（`in_use` / `max_concurrent` / 可选 `model_in_use`）；Web 账号卡片显示占用/上限，表单可编辑 `model_concurrency`；设置页补「Provider 协议全局并发」入口（账号 `max_concurrent` 之外的额外收紧）；文案标明账号 CLI 独占。
 
 ### 变更
 
-- 治理 CLI 版本更新：Pi 1.1.0、Claude Code 2.1.296，并同步 npm 完整性校验、镜像清单和离线手册目录。DSH 继续使用已验证的 0.1.1-rc.2 完整依赖组合；上游较新的局部包未形成可替换的 JSON-RPC 发布组合。
+- 治理 CLI 版本更新（#714）：Pi **1.1.0**、Claude Code **2.1.296**；DeepSeek Harness 迁移到官方 **`@deepseek-ai/dsh@0.2.0-rc.2`**，用隔离 lockfile 冻结完整 npm 依赖，替换旧 demo launcher 为官方 `dsh --profile`。同步 npm 完整性校验、官方镜像清单和离线手册。
+- DSH 受治理 profile（#714）：显式 `bundles: []` 与 plugin allowlist；Standard 使用 native tools，PTC 使用 `run_code`；原生子代理继承 Gateway/model/reasoning。模型访问仅经 Scheduler Model Gateway 与短期 token，Skill 只从 Scheduler 物化根发现，不启动 UI/web、settings/credential discovery、native DeepSeek routes、plugin-manager 或 telemetry。当前 Session 归档与查看器使用 v4，历史 v0–v3 仅只读。
 - Provider 账号 CLI 归属与并发文档收口（#707 Phase 3）：`ARCHITECTURE` 写明六档优先级链、CLI 排他 ⇒ 凭据级 `max_concurrent` 即 CLI 级并发、Provider 档先于 Credential；`DESIGN` 把账号 × CLI 1:1 与使用期四层同口径 fail-closed 写入内核凭据边界。不 bump schema：`credentials.agent_cli` 列保持可空（`git` / `oci_registry` 无 CLI 归属）；`llm_provider` 空值已由 Phase 1 API fail-closed，不做列级 `NOT NULL` / `SCHEMA_VERSION` 重建。
 
 ### 修复
@@ -14,8 +17,25 @@
 - Verify 自动确认、补证确认、显式提案与状态摘要统一消费完整确认门；安全 profile 的独立证据、impact 与结构化反证尝试贯通摄入、快照和校验。失败来源、修订不匹配和证据完整性不再被内部 Fact gate 绕过。
 - Pi 空闲催促与恢复输入使用可启动新回合的 RPC prompt，核验实际 session 身份并有界等待 ACK/启动；错误状态按回合隔离，终态错误不会被 settled 覆盖。新增真实 Pi 离线恢复冒烟。
 - Report 按 Finding ID 和冻结状态章节逐项核对覆盖，缺失时使用确定性完整模板；大报告不再要求模型在 summary 字节上限内枚举所有条目。动态工具示例、rework 缺项要求与角色/镜像策略同步机器契约。
+- 角色证据协议与镜像策略统一（#714）：Verify 只读已有结构化证据，缺口使用 `rework` 与非空 `missing_evidence`，人工阻塞使用 `needs_human`；普通 Test/review 只有绑定真实 Finding 才提交 verification，无目标时提交普通 Fact。Report/Hub 不因镜像手册扩大写入权限，角色种子与动态工具说明补齐 `impact`、`attempted_refutation` 和正确示例。
+- Image Admission 删除对 schema v55 已移除 `selected_version_id` 的查询（#704 / #706），修复 tracked-tag 检查与连续复扫在 v55+ 数据库上的列不存在错误。
+- 任务总览长目标默认折叠为单行预览，按实际截断状态提供展开/收起并保留换行（#709 / #710）。
+- 官方 Agent 镜像刷新 Bookworm `xz-utils` pin，修复旧精确版本不可用导致的构建失败（#714）。
 - 网络拓扑消除服务发现歧义（#685 方案 4）：bridge 部署下 Scheduler 只挂业务网 `deepsonar`，`opensandbox` 撤回 #687 的沙箱网双挂；受管 `deepsonar-gateway-proxy` 改经命名卷 `deepsonar-gateway-upstream` 上的 Unix socket 回连 Scheduler，不再解析 `scheduler` 服务名，Podman 多 aardvark nameserver / musl 并行查询不再能让 Gateway 或 OpenSandbox / PostgreSQL / Silo 间歇 `ENOTFOUND`。代理路径白名单（`/gateway`、`/control/v1`）、Job token 鉴权与拒绝管理 API / CONNECT 不变，且代理不在业务网上。host 部署保持经 `host.docker.internal`（`/etc/hosts`）回连。新增 compose 拓扑自检 `compose-network-topology.test.ts`；健康探测有界重试仅保留为瞬态保护。
 - Provider 账号 CLI 归属贯通到候选解析层（#707 Phase 1 / 方案 A）：`resolve-credential` 删除软回退与 `default_credential_id` 侧路；CLI 不匹配返回 `provider_credential_cli_mismatch`（`permanent_failure`）；协议不兼容返回 `provider_credential_protocol_incompatible`（`model_correctable`）。凭据 create/PATCH 拒绝空 `agent_cli`（`CREDENTIAL_CLI_REQUIRED`）；在跑 Job 持有账号时禁止改 `agent_cli`/`provider`（`CREDENTIAL_IN_USE_BY_RUNNING_JOBS`）。
+
+### 工程
+
+- 补齐 Verify 完整安全证据生命周期、PostgreSQL 补证确认、并发收敛与角色镜像策略回归；fake Agent 证据与真实确认契约一致（#714）。真实 Pi 离线 RPC 恢复、DSH 官方 SDK profile 的 native/PTC/子代理、v4 归档、同进程 follow-up 和跨进程恢复拒绝均有专门冒烟/回归。
+- 发版文档保鲜：校正产品 Git tag 与私有 workspace package 版本的边界、账号已配置模型选型事实，以及 Release 自动回写 registry/部署 tag、纯文档最终 main CI 的操作说明。
+
+### 部署 / 升级说明
+
+- 本版相对 v0.4.11 **保持 schema v56，不要求数据库重建**。`database/schema.sql` 的角色提示词改动是新库种子；正常升级不会自动覆盖已有 RoleConfig 提示词，历史 Job 快照也不重写。需要采用新种子文案的现有配置，应由管理员检查后显式更新；运行期 Scheduler 策略与确认硬门会随新版代码生效。不要为了刷新文案直接执行重建，重建流程会重写内置全局角色提示词。
+- Pi / Claude Code / DSH 的新版本只有本次官方运行镜像发布后才会进入真实沙箱。控制面和官方运行时均应更新到本次已验证发行物；新 Job 冻结新镜像 digest，历史 Job 保留原快照。
+- **DSH 跨进程持久 JSON-RPC Session resume 不受支持**：同进程 `session/prompt` follow-up 可用；跨进程恢复以 `CONTEXT_RESUME_UNSUPPORTED` fail closed，不静默新建会话或自动重试。旧 0.1.1-rc.2 demo 路径也未实现持久 resume，本版纠正此前描述，并非保留旧恢复兼容路径。
+- Provider 账号必须配置唯一 `agent_cli` 且与 Job CLI 匹配；运行中的账号不能改 CLI/协议归属。升级前核对项目授权账号和账号 settings 的模型名单，空 CLI 或错配会提前失败；显式模型配空名单也不会回退到探测目录。
+- bridge 部署请按新版 Compose 重建服务拓扑：Scheduler/OpenSandbox 留在业务网，受管 Gateway proxy 经命名卷 Unix socket 回连 Scheduler；不要照旧版双挂网说明手工保留冲突拓扑。host 部署仍经 `host.docker.internal` 回连。
 
 ## [0.4.11] - 2026-09-24
 
@@ -1056,6 +1076,7 @@
 
 - The bundled runtime registry was synchronized for the `v0.1.18` release.
 
+[0.5.1]: https://github.com/SummerSec/DeepSonar/compare/v0.4.11...v0.5.1
 [0.4.11]: https://github.com/SummerSec/DeepSonar/compare/v0.4.10...v0.4.11
 [0.4.10]: https://github.com/SummerSec/DeepSonar/compare/v0.4.9...v0.4.10
 [0.4.9]: https://github.com/SummerSec/DeepSonar/compare/v0.4.8...v0.4.9
