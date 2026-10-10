@@ -67,7 +67,7 @@ import {
   registerJobEvidenceSecrets,
 } from "./evidence.js";
 import { mintJobToken } from "./gateway.js";
-import { collectEvidenceSnapshot, freezeVerifyFindingSubject, projectVerifyEvidenceForPrompt } from "./verify.js";
+import { collectEvidenceSnapshot, evaluateFindingFactGate, freezeVerifyFindingSubject, projectVerifyEvidenceForPrompt } from "./verify.js";
 import { buildVerifyJobPrompt } from "./verify-prompt.js";
 import { readReportBlob } from "./report.js";
 import { REPORT_QUANTITY_VERBATIM_NOTE } from "./report-numeric-fidelity.js";
@@ -484,7 +484,7 @@ export async function ingestFactSemanticEvent(
   }));
 }
 
-function resultContract(
+export function resultContract(
   toolNames: PlatformToolName[],
   isHub: boolean,
   isRole: boolean,
@@ -496,7 +496,7 @@ function resultContract(
     return `需要派发时先调用 list_available_roles 获取本轮数据库角色；调用 submit_hub_decision 时只允许 complete、intents 或 payload_file 三选一。from 必须填写当前 YAML root_id/fact/finding 的 UUID 值（不要写字段名 root_id、别名或占位符），role 必须原样命中工具结果（英文 name，禁止缩写），每个 intent 的 description≥8、prompt≥32 且完整自包含。可选 role_prompt 是该 Worker Job 的业务提示词覆盖，只冻结到新 Job，不修改持久化 RoleConfig；省略时继承选中角色的 RoleConfig。需要临时业务身份时，在 intent 添加 role_definition（仅 scope=job，随本 Job 快照冻结，不写 agent_roles）：name/title/description/instructions_markdown 只能定义业务身份和提示词，role 仍是平台权限与工具边界，不能借此增加凭据、工具、镜像或出网权限；跨任务复用写成受治理 Skill 源里的 SKILL.md，由 Agent search_skills → pull_skill 取用；role_definition 与 role_prompt 不能同时使用。intent 可选 runtime_image_key 必须原样来自本轮 list_available_runtime_images（按 purpose/capabilities/selection_hints 匹配任务后复制 image_key），且须与该角色 CLI 兼容、readiness=ready；省略时按角色缺省镜像解析，目录之外或 CLI 不兼容的值会被整单拒绝（invalid_runtime_image），未就绪镜像拒绝（runtime_image_not_ready）且不创建 Worker。findings_index 中 verify_required=false 的 Finding 已被 minVerifySeverity 策略豁免，不得为它派 review/test 或 request_human。多意图/长 prompt 时必须先 Write 完整 JSON 到 /workspace（如 hub_decision_payload.json），再 submit_hub_decision({"payload_file":"hub_decision_payload.json"})，禁止在 tool 参数里塞超大 JSON 导致截断。submit_hub_decision 每个 Job 成功提交后只能一次；仅当上一次 HTTP 请求失败或参数校验失败时才可修正参数后重试。随后调用 mark_job_done 提交本轮摘要。只在文本里写出决策内容不等于提交，平台只认工具调用。`;
   }
   if (isVerify) {
-    return `验证结束后调用 mark_job_done，必须同时提交 summary 与 verdict；verdict 只能是 confirmed、rework、needs_human、refuted。confirmed 只认图上结构化 Fact（finding_id / subject_revision / ownership / expected / actual / outcome），不要重读源码、制品或 maker 结论做第二次复核；门禁失败时调度器会记为 rework 并回弹 Hub。全量匹配修订的 refutes 可提案 refuted，终态仍由 Scheduler 硬门写入。只在文本里给出结论不等于提交，平台只认工具调用。`;
+    return `验证结束后调用 mark_job_done，必须同时提交 summary 与 verdict；verdict 只能是 confirmed、rework、needs_human、refuted。confirmed 必须通过冻结策略的完整组合硬门且 required_missing 为空，只认当前修订、成功来源 Job、独立结构化 Fact（finding_id / subject_revision / ownership / expected / actual / outcome）；安全 profile 还要求独立 review/test 配对、显式 attempted_refutation 与 Finding impact 或有依据的 impact_waiver。不要重读源码、制品或 maker 结论做第二次复核；门禁失败时调度器会记为 rework 并回弹 Hub，提案 rework 必须带非空 missing_evidence 数组。全量匹配修订的 refutes 可提案 refuted，终态仍由 Scheduler 硬门写入。只在文本里给出结论不等于提交，平台只认工具调用。`;
   }
   if (isRole) {
     return enabled.has("emit_fact")
@@ -524,7 +524,7 @@ function componentNames(items: unknown[]): string[] {
 /** 短指针：完整调用规则见 PLATFORM_CONTROL_CALLING_RULES / deepsonar-control Skill。 */
 const CONTROL_TRANSPORT_POINTER = "控制传输与调用规则见下文「调用规则」及 deepsonar-control Skill；本 Job 仅声明并注入 Job-scoped control API，Runtime Adapter 不代发 HTTP。";
 
-function instructionDocument(input: {
+export function instructionDocument(input: {
   role: string;
   roleDescription: string;
   customInstructions?: string | null;
@@ -995,8 +995,9 @@ ${graph.yaml}`;
     const findingId = (job.finding_id as string | null) ?? null;
     let evidenceBlock = "（无绑定 Finding 或尚无合格证据快照）";
     if (findingId) {
-      const [frow] = await sql`SELECT job_id FROM findings WHERE id = ${findingId}`;
+      const [frow] = await sql`SELECT id, profile, job_id, raw_json FROM findings WHERE id = ${findingId}`;
       const snap = await collectEvidenceSnapshot(sql, findingId, (frow?.job_id as string) ?? null);
+      if (frow) evaluateFindingFactGate(frow, snap, (frow.job_id as string) ?? null);
       evidenceBlock = JSON.stringify(projectVerifyEvidenceForPrompt(snap), null, 2);
     }
     initialInput = buildVerifyJobPrompt({
@@ -1045,7 +1046,7 @@ ${REPORT_QUANTITY_VERBATIM_NOTE}
 ${inputBlock}
 \`\`\`
 ${graph ? `\n任务画布（YAML）：\n${graph.yaml}\n` : ""}
-在 mark_job_done.summary 中给出完整 Markdown 报告正文：必须区分「已确认问题」「已排除」「未证实」「待人工确认」与「未自动验证（严重度策略）」；策略排除项不等于误报或待人工，未证实不等于已排除。即使没有 confirmed 也要明确「本次未形成已确认漏洞」，并尽量引用 Finding id 或标题。SARIF 仅含 confirmed。`;
+在 mark_job_done.summary 的 8192 UTF-8 字节上限内提交 Markdown：可容纳完整报告时，使用「已确认问题」「已排除」「未证实」「待人工确认」与「未自动验证（严重度策略）」二级章节，每个 Finding ID 必须在正确状态章节中精确且唯一出现，标题或状态词不能代替 ID；不能容纳时只提交有界摘要，Scheduler 从冻结 report-input.json 生成保留全部 Finding ID 与数值口径的完整确定性模板。策略排除项不等于误报或待人工，未证实不等于已排除。即使没有 confirmed 也要明确「本次未形成已确认漏洞」。SARIF 仅含 confirmed。`;
   } else {
     initialInput = `执行 Hub 下发的安全审计任务：
 ${workerPrompt}

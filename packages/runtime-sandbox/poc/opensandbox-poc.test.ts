@@ -239,7 +239,7 @@ function fakeCliStdout(command: string): string | undefined {
       },
     })}\n`;
   }
-  if (command.includes("dsh-sdk-jsonrpc-demo") || command.includes("packaged-bin.js")) {
+  if (command.includes("@deepseek-ai/dsh/lib/bin.js")) {
     return `${JSON.stringify({ jsonrpc: "2.0", method: "session.status", params: { status: "idle" } })}\n`;
   }
   return undefined;
@@ -277,7 +277,7 @@ function hostSession(): OpenSandboxSession {
       if (command.includes(".dsh/sessions")) {
         const match = command.match(/-path '\*\/([^']+)\/session\.jsonl'/);
         const sessionId = match?.[1] ?? "session-poc162";
-        return { exitCode: 0, stdout: `/workspace/.deepsonar-home/.dsh/sessions/proj/${sessionId}/session.jsonl\n`, stderr: "" };
+        return { exitCode: 0, stdout: `/workspace/.deepsonar-home/.dsh/sessions/proj/${sessionId}/session.v4.jsonl\n`, stderr: "" };
       }
       const cat = command.match(/cat -- ("(?:\\.|[^"])+")/);
       if (cat) {
@@ -558,7 +558,7 @@ test("OpenSandbox CLI launch PoC starts all adapters and closes stdin", async ()
     assert.ok(result[id].sessionId, `${id} should capture session_id`);
     assert.equal(result[id].archived, true);
     assert.ok(result[id].archiveCount > 0);
-    assert.equal(result[id].resumed, true);
+    assert.equal(result[id].resumed, id !== "dsh");
     assert.ok(result[id].artifacts[0]?.content);
     if (id === "pi") assert.match(result[id].sessionFile ?? "", /\/workspace\/\.deepsonar-home\/\.pi\/agent\//);
   }
@@ -647,7 +647,7 @@ test("OpenSandbox cancel PoC rejects in-flight provision and reports leftovers",
 function retryCliOf(command: string): "claude-code" | "pi" | "dsh" | undefined {
   if (/\bclaude\b/.test(command)) return "claude-code";
   if (command.includes("pi --mode rpc")) return "pi";
-  if (command.includes("dsh-sdk-jsonrpc-demo") || command.includes("packaged-bin.js")) return "dsh";
+  if (command.includes("@deepseek-ai/dsh/lib/bin.js")) return "dsh";
   return undefined;
 }
 
@@ -668,12 +668,13 @@ function retryLines(
     const state = {
       type: "response",
       command: "get_state",
+      id: "deepsonar-1",
       success: true,
       data: { sessionId, sessionFile: `/workspace/.deepsonar-home/.pi/agent/${sessionId}.jsonl` },
     };
     return phase === "ok"
-      ? [state, { type: "message_end", message: { content: [{ type: "text", text: "ok" }] } }, { type: "agent_settled" }]
-      : [state, { type: "error", message: err }];
+      ? [state, { type: "response", id: "deepsonar-2", command: "prompt", success: true, data: { disposition: "started" } }, { type: "agent_start" }, { type: "message_end", message: { content: [{ type: "text", text: "ok" }] } }, { type: "agent_settled" }]
+      : [state, { type: "response", id: "deepsonar-2", command: "prompt", success: true, data: { disposition: "started" } }, { type: "agent_start" }, { type: "error", message: err }];
   }
   return phase === "ok"
     ? [{ jsonrpc: "2.0", method: "session.status", params: { status: "idle", sessionId: "session-poc162" } }]
@@ -723,11 +724,18 @@ function retryClient(session: OpenSandboxSession): OpenSandboxClient {
   };
 }
 
-test("OpenSandbox runRealAgent retries a transient 503 on the same session for every CLI", async () => {
+test("OpenSandbox runRealAgent retries supported sessions and rejects DSH cross-process recovery", async () => {
   const image = "img@sha256:" + "a".repeat(64);
   for (const provider of ["claude-code", "pi", "dsh"] as const) {
     const session = retrySession(503);
     const result = await runOpenSandboxRetryPoc(retryClient(session), { image, provider });
+    if (provider === "dsh") {
+      assert.equal(result.retrying, false);
+      assert.equal(result.terminalOutcome, "failure");
+      assert.equal(session.commands.filter((command) => command.includes("@deepseek-ai/dsh/lib/bin.js")).length, 1);
+      assert.equal(result.leftovers, 0);
+      continue;
+    }
     assert.equal(result.retrying, true, provider);
     assert.equal(result.reason, "http", provider);
     assert.equal(result.skipped, false, provider);
@@ -737,8 +745,6 @@ test("OpenSandbox runRealAgent retries a transient 503 on the same session for e
       assert.ok(session.commands.some((command) => command.includes("--resume 'retry-claude-code'")), provider);
     } else if (provider === "pi") {
       assert.ok(session.commands.some((command) => command.includes("--session '/workspace/.deepsonar-home/.pi/agent/retry-pi.jsonl'")), provider);
-    } else {
-      assert.ok(session.commands.filter((command) => command.includes("packaged-bin.js")).length >= 2, provider);
     }
   }
 });

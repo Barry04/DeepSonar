@@ -107,7 +107,7 @@ test("specialty image boundary injects for any role; chrome/clickhouse peer mobi
     "deepsonar-mobile",
   ]) {
     assert.ok(keys.includes(key), `missing specialty policy for ${key}`);
-    assert.ok(specialtyPolicyForImageKey(key)?.body.includes("needs_human") || specialtyPolicyForImageKey(key)?.body.includes("inconclusive"));
+    assert.ok(specialtyPolicyForImageKey(key)?.body.includes("role-scoped runtime evidence policy"));
   }
 });
 

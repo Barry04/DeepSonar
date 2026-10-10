@@ -135,7 +135,8 @@ export function isRetryableContextWindowExceeded(error: unknown): boolean {
   return classifyDispatcherFailure(error).reason === CONTEXT_WINDOW_EXCEEDED_REASON;
 }
 import { finalizeReportJob } from "./report.js";
-import { canvasFindingsConverged, collectEvidenceSnapshot, evaluateConfirmGate, resolveFindingSubjectRevision } from "./verify.js";
+import { buildEvidenceSnapshot, canvasFindingsConverged, collectEvidenceSnapshot } from "./verify.js";
+import { fakeFindingPayload, fakeVerificationFact, fakeVerifyDone } from "./fake-agent-evidence.js";
 import {
   assertChromeRuntimeEgressAllowed,
   requireFrozenSnapshotAllowEgress,
@@ -1463,45 +1464,23 @@ async function executeFake(jobId: string, type: string) {
     } | null;
     await emit("progress", { message: "假 agent：开始审计", percent: 10 });
     // 模拟真实 agent 产出的结构化 finding（severity 默认 high → 触发规则引擎派生验证）
-    await emit("finding", {
-      title: fake?.title ?? "SQL 注入：未参数化的查询拼接",
-      severity: fake?.severity ?? "high",
-      location: fake?.location ?? "auth/login.php:42",
-      summary: fake?.summary ?? "用户输入未经参数化处理直接拼入 SQL 查询语句，攻击者可构造恶意参数改变查询语义并读取未授权数据。",
-      rule_id: "fake-sqli-001",
-      raw: { source: "fake-agent", v: 1 },
-    });
+    await emit("finding", fakeFindingPayload(fake));
     await emit("progress", { message: "假 agent：审计完成", percent: 100 });
     return; // done 由 runJob 兜底
   }
 
   if (type === "verify_finding") {
     await emit("progress", { message: "假 agent：验证中（证据硬门）", percent: 50 });
-    // Fact-first 门禁通过才 confirmed；否则 rework 回弹 Hub
+    // 完整安全门禁通过才 confirmed；否则携带实际缺项 rework 回弹 Hub
     const [vjob] = await sql`SELECT finding_id, payload_json FROM jobs WHERE id = ${jobId}`;
     const findingId = vjob?.finding_id as string | null;
-    let canConfirm = false;
-    if (findingId) {
-      const [f] = await sql`SELECT job_id, raw_json FROM findings WHERE id = ${findingId}`;
-      const originJobId = (f?.job_id as string) ?? null;
-      const snap = await collectEvidenceSnapshot(sql, findingId, originJobId);
-      canConfirm = evaluateConfirmGate(snap, {
-        findingId,
-        subjectRevision: resolveFindingSubjectRevision((f ?? {}) as Record<string, unknown>, snap.facts),
-        originJobId,
-      }).ok;
-    }
+    const [finding] = findingId ? await sql`SELECT * FROM findings WHERE id = ${findingId}` : [];
+    const evidence = findingId
+      ? await collectEvidenceSnapshot(sql, findingId, (finding?.job_id as string) ?? null)
+      : buildEvidenceSnapshot([], null);
     await ingestEvent(jobId, {
-      v: 1,
-      event_id: randomUUID(),
-      type: "done",
-      payload: canConfirm
-        ? { summary: "假 agent：独立复核与实测证据充分，确认可利用", verdict: "confirmed" }
-        : {
-            summary: "假 agent：缺少独立复核或实测证据，需要 Hub 补证",
-            verdict: "rework",
-            missing_evidence: ["independent_review", "runtime_test"],
-          },
+      v: 1, event_id: randomUUID(), type: "done",
+      payload: fakeVerifyDone(finding ?? null, evidence),
     });
     return;
   }
@@ -1574,7 +1553,7 @@ async function executeFake(jobId: string, type: string) {
             from,
             role: test.name,
             description: `实测 Finding：补充 runtime test 证据`,
-            prompt: `对绑定 Finding 做实际 runtime_test，通过 emit_fact 提交 verification.evidence_kind=test 的结构化证据（含 subject_revision/steps/expected/actual）。先依据目标语言和构建文件检查 Scheduler 冻结镜像内与目标相关的预装工具：Java 用 command -v java、java -version；使用 Maven 时再用 command -v mvn、mvn -v；Python 用对应 python3.x/uv；Go 用 command -v go、go version；Rust 用 command -v rustc、rustc --version、command -v cargo、cargo --version。禁止 apt-get、下载 JDK/Maven 压缩包、./mvnw 或其它工具链 bootstrap fallback。相关工具缺失时提交 inconclusive/needs_human，不得臆造 confirmed。finding_id=${findingId}`,
+            prompt: `对绑定 Finding 做实际 runtime_test，通过 emit_fact 提交 verification.evidence_kind=test 的结构化证据（含 subject_revision/steps/expected/actual/artifact_refs/attempted_refutation）。先依据目标语言和构建文件检查 Scheduler 冻结镜像内与目标相关的预装工具：Java 用 command -v java、java -version；使用 Maven 时再用 command -v mvn、mvn -v；Python 用对应 python3.x/uv；Go 用 command -v go、go version；Rust 用 command -v rustc、rustc --version、command -v cargo、cargo --version。禁止 apt-get、下载 JDK/Maven 压缩包、./mvnw 或其它工具链 bootstrap fallback。相关工具缺失时提交 outcome=inconclusive 的结构化 Fact；人工授权阻塞使用 request_human 与显式 subject，不得臆造 confirmed。finding_id=${findingId}`,
           });
         }
         if (intents.length > 0) {
@@ -1700,29 +1679,10 @@ async function executeFake(jobId: string, type: string) {
   await emit("progress", { message: `假 agent（${type}）：执行中`, percent: 50 });
 
   if (vf?.finding_id && (type === "review" || type === "test" || type === "analyze" || type === "audit")) {
-    const kind = type === "test" ? "test" : "review";
-    // 若 required 明确只要另一类，仍按角色默认：test→test，其它→review
-    const evidenceKind = type === "test" ? "test" : kind;
-    await emit("fact", {
-      intent_node_id: (rolePayload.intent_node_id as string) ?? null,
-      title: `假 agent ${evidenceKind} 证据`,
-      description: `假 agent（${type}）：对 Finding ${vf.finding_id} 的${evidenceKind === "test" ? "实测" : "独立复核"}证据（演示）。`,
-      verification: {
-        finding_id: vf.finding_id,
-        evidence_kind: evidenceKind,
-        outcome: "supports",
-        subject_revision: "demo-target@v1",
-        environment: "fake-sandbox",
-        steps: [
-          evidenceKind === "test" ? "构造恶意输入" : "阅读相关源码路径",
-          evidenceKind === "test" ? "发送请求并观察响应" : "追踪数据流至汇点",
-          "记录可复核结果",
-        ],
-        expected: evidenceKind === "test" ? "未授权数据不应返回" : "输入应参数化",
-        actual: evidenceKind === "test" ? "响应包含其他租户记录" : "$_GET 直达查询拼接",
-        artifact_refs: [{ uri: `fake://evidence/${jobId}` }],
-      },
-    });
+    await emit("fact", fakeVerificationFact(
+      vf.finding_id, jobId, type === "test" ? "test" : "review",
+      (rolePayload.intent_node_id as string) ?? null,
+    ));
     return;
   }
 

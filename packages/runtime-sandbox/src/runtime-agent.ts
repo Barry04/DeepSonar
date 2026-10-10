@@ -19,9 +19,11 @@ import {
   requireAgentCliRuntimeAdapter,
   type AgentCliRuntimeSnapshot,
   type DshProviderRuntimeConfig,
+  type AdapterRuntimeState,
 } from "./runtime-adapters.js";
 import type { AgentRuntimeLaunchSpecification } from "./agent-runtime-profile-adapters.js";
 import { assertWorkspaceWritePath, shellQuote, type RuntimeHost } from "./runtime-host.js";
+import { PiRpcDriver } from "./pi-rpc-driver.js";
 import { createStdinCloseKiller } from "./runtime-stdin-close.js";
 
 
@@ -1362,7 +1364,7 @@ export async function runRealAgent(host: RuntimeHost, spec: RealAgentSpec): Prom
     ...(spec.piExtensions ? { piExtensions: spec.piExtensions } : {}),
   };
   let exec = await adapter.start(adapterContext);
-  const adapterState = {
+  const adapterState: AdapterRuntimeState = {
     sessionId: spec.contextIdentity?.session_id,
     sessionFile: spec.contextIdentity?.session_file,
     finalText: undefined as string | undefined,
@@ -1376,25 +1378,40 @@ export async function runRealAgent(host: RuntimeHost, spec: RealAgentSpec): Prom
     if (!encoded) return;
     await exec.write(encoded);
   };
-  const writeInitialMessage = async (content: string) => writeEncoded(adapter.encodeInput(content, adapterState));
-  const writeSteerMessage = async (content: string) => writeEncoded(
-    adapter.encodeSteer ? adapter.encodeSteer(content, adapterState) : adapter.encodeInput(content, adapterState),
-  );
-  const writeFollowUpMessage = async (content: string) => writeEncoded(
-    adapter.encodeFollowUp ? adapter.encodeFollowUp(content, adapterState) : adapter.encodeInput(content, adapterState),
-  );
-  if (adapter.encodeGetState) await writeEncoded(adapter.encodeGetState());
-  const disposeMessageSource = await spec.onRunReady?.({
+  const resetPiTurn = () => {
+    adapterState.failed = false;
+    adapterState.errorDetail = undefined;
+    adapterState.finalText = undefined;
+    adapterState.streamedText = undefined;
+    adapterState.streamedReasoning = undefined;
+  };
+  let piDriver = spec.provider === "pi" ? new PiRpcDriver(exec, resetPiTurn) : undefined;
+  const writeInitialMessage = async (content: string) => {
+    if (piDriver) await piDriver.initialize(content);
+    else await writeEncoded(adapter.encodeInput(content, adapterState));
+  };
+  const writeSteerMessage = async (content: string) => {
+    if (piDriver) await piDriver.send(content);
+    else await writeEncoded(adapter.encodeSteer ? adapter.encodeSteer(content, adapterState) : adapter.encodeInput(content, adapterState));
+  };
+  const writeFollowUpMessage = async (content: string) => {
+    if (piDriver) await piDriver.send(content);
+    else await writeEncoded(adapter.encodeFollowUp ? adapter.encodeFollowUp(content, adapterState) : adapter.encodeInput(content, adapterState));
+  };
+  let disposeMessageSource: void | (() => void | Promise<void>);
+  const disposeSource = async () => { if (typeof disposeMessageSource === "function") await disposeMessageSource(); };
+  const registerMessageSource = async () => { disposeMessageSource = await spec.onRunReady?.({
     sendMessage: writeSteerMessage,
     readWorkspaceFile: (filePath, maxBytes) => host.readWorkspaceFile(filePath, maxBytes),
     writeWorkspaceFile: (filePath, bytes) => host.writeHumanInboxFile(filePath, bytes),
-  });
+  }); };
   try {
     // 在首条 prompt 写入 stdin 前注册 Job 级运行 handler，避免 CLI 的首次 API
     // 发现/调用与宿主注册发生竞态。
-    await writeInitialMessage(spec.input);
+    if (piDriver) await piDriver.initialize(spec.input, registerMessageSource);
+    else { await registerMessageSource(); await writeInitialMessage(spec.input); }
   } catch (error) {
-    if (typeof disposeMessageSource === "function") await disposeMessageSource();
+    await disposeSource();
     throw error;
   }
   let semanticError: string | undefined;
@@ -1506,6 +1523,7 @@ export async function runRealAgent(host: RuntimeHost, spec: RealAgentSpec): Prom
               continue; // CLI 的非 JSON 噪音行；后续合法行继续处理
             }
             const rawParsed = parsedLine.parsed;
+            if (piDriver && !await piDriver.observe(rawParsed)) continue;
             const decodedEvents = applyRuntimeOutput(adapter, rawParsed, adapterState);
             await observeSessionIdentity({ sessionId: adapterState.sessionId, sessionFile: adapterState.sessionFile });
             bindObservedResumeIdentity();
@@ -1579,6 +1597,9 @@ export async function runRealAgent(host: RuntimeHost, spec: RealAgentSpec): Prom
                   const nudge = spec.nudgeMessage ??
                     "协议要求的系统工具调用还没有完成。请立即通过 Job 控制 API 提交（不要只用文本描述），然后结束本轮。";
                   if (adapter.capabilities.incrementalMessages) {
+                    attemptFinalText = "";
+                    attemptTerminalResult = undefined;
+                    terminalOutcome = undefined;
                     await writeFollowUpMessage(nudge);
                   } else {
                     if (!sessionId) throw new Error(`AGENT_CLI_COMPLETION_GATE_SESSION_MISSING: ${adapter.id}`);
@@ -1603,7 +1624,10 @@ export async function runRealAgent(host: RuntimeHost, spec: RealAgentSpec): Prom
         }
       } catch (error) {
         processError = error;
+        await exec.kill().catch(() => {});
       } finally {
+        processError ??= piDriver?.finishError();
+        piDriver?.dispose();
         stdinCloseKiller.cancel();
         if (piFramer) {
           try {
@@ -1660,6 +1684,11 @@ export async function runRealAgent(host: RuntimeHost, spec: RealAgentSpec): Prom
             spec.onEvent?.({ type: "run.retry_skipped", reason, cause: "compaction_required" });
           }
         } else if (reason) {
+          if (!adapter.persistentSessionResume) {
+            runError = `CONTEXT_RESUME_UNSUPPORTED: ${adapter.id} SDK cannot reopen a persisted session after process exit; start a new Job explicitly.`;
+            terminalOutcome = "failure";
+            break;
+          }
           const canResume = Boolean(sessionId && sessionResumeAttempts < CLI_SESSION_RESUME_MAX_ATTEMPTS);
           if (canResume) {
             sessionResumeAttempts++;
@@ -1693,6 +1722,12 @@ export async function runRealAgent(host: RuntimeHost, spec: RealAgentSpec): Prom
       }
       if (!resumedExec) break;
       exec = resumedExec;
+      if (spec.provider === "pi") {
+        resetPiTurn();
+        adapterState.sessionId = undefined;
+        adapterState.sessionFile = undefined;
+        piDriver = new PiRpcDriver(exec, resetPiTurn, { sessionId, sessionFile });
+      }
       // 只有增量 CLI 通过 stream-json stdin 注入恢复消息；Codex/OpenCode
       // 已把恢复消息作为固定命令参数传入，不能再重复写入 stdin。
       stdoutBuffer = "";
@@ -1702,8 +1737,7 @@ export async function runRealAgent(host: RuntimeHost, spec: RealAgentSpec): Prom
       attemptCloseReason = undefined;
       attemptStderrTail = "";
       if (adapter.capabilities.incrementalMessages && resumedInput) {
-        if (spec.provider === "dsh") await writeInitialMessage(resumedInput);
-        else await writeFollowUpMessage(resumedInput);
+        await writeInitialMessage(resumedInput);
       }
     }
   } catch (e) {
@@ -1718,9 +1752,10 @@ export async function runRealAgent(host: RuntimeHost, spec: RealAgentSpec): Prom
       terminalOutcome = "failure";
     }
   } finally {
+    piDriver?.dispose();
     stdinCloseKiller.cancel();
     discardPendingSemanticTools(semanticToolState);
-    if (typeof disposeMessageSource === "function") await disposeMessageSource();
+    await disposeSource();
   }
   stderrEvidence.finish();
 

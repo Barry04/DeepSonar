@@ -782,3 +782,14 @@ test("DSH 0.1.1-rc.2 session fixture covers product fields, unknown frames, and 
   const forged = result.items.find((item) => item.toolName === "mcp__deepsonar-control__emit_fact");
   assert.equal(forged?.kind, "tool_call");
 });
+
+test("DSH 0.2.0-rc.2 v4 archive parses direct user data, system prompt, and usage", () => {
+  const result = parseAgentSession(loadSessionFixture("dsh-0.2.0-rc.2.session.jsonl"), { cli: "dsh" });
+  assert.equal(result.format, "dsh");
+  assert.ok(result.items.some((item) => item.kind === "system" && item.title === "DSH system" && item.body?.includes("expert coding assistant")));
+  assert.ok(result.items.some((item) => item.kind === "user" && item.body === "say verified"));
+  assert.ok(result.items.some((item) => item.kind === "assistant" && item.body === "verified"));
+  assert.equal(result.totals.input, 10);
+  assert.equal(result.totals.output, 2);
+  assert.ok(result.items.some((item) => item.kind === "other" && item.title === "request/header"));
+});

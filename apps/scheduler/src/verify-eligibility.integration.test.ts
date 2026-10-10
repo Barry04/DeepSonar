@@ -54,9 +54,9 @@ if (!testDatabaseUrl) {
         VALUES (${canvasId}, 'finding', 'missing evidence finding', 'pending', ${sql.json({})})
         RETURNING id`;
       await sql`
-        INSERT INTO findings (id, project_id, job_id, node_id, fingerprint, title, severity, summary)
+        INSERT INTO findings (id, project_id, job_id, node_id, fingerprint, title, severity, summary, profile)
         VALUES (${findingId}, ${projectId}, ${originJobId}, ${findingNode.id as string},
-          ${`verify-eligibility-${findingId}`}, 'missing evidence finding', 'high', 'integration finding')`;
+          ${`verify-eligibility-${findingId}`}, 'missing evidence finding', 'high', 'integration finding', 'security.vulnerability')`;
 
       const finding = (await sql`SELECT * FROM findings WHERE id = ${findingId}`)[0] as Record<string, unknown>;
       const first = await createVerifyRound(sql, {
@@ -136,7 +136,12 @@ if (!testDatabaseUrl) {
       const [reviewNode] = await sql`
         INSERT INTO canvas_nodes (canvas_id, job_id, node_type, title, status, body_json, verification_status)
         VALUES (${canvasId}, ${reviewJobId}, 'fact', 'review evidence', 'succeeded', ${sql.json({
-          verification: { finding_id: findingId, evidence_kind: "review", outcome: "supports" },
+          verification: {
+            finding_id: findingId, evidence_kind: "review", outcome: "supports",
+            subject_revision: "integration-revision",
+            expected: "Cross-user requests are denied by the ownership check",
+            actual: "The request handler reaches victim data without checking ownership",
+          },
         })}, 'unverified')
         RETURNING id`;
       const [afterReviewFinding] = await sql`SELECT * FROM findings WHERE id = ${findingId}`;
@@ -163,12 +168,48 @@ if (!testDatabaseUrl) {
             evidence_kind: "test",
             outcome: "supports",
             subject_revision: "integration-revision",
-            steps: ["run"],
-            expected: "pass",
-            actual: "pass",
+            steps: ["Request another user's record with an authenticated test account"],
+            expected: "403 Forbidden",
+            actual: "200 OK with the other user's record",
           },
         })}, 'unverified')
         RETURNING id`;
+      // A structured review/test pair can pass the inner Fact gate while the
+      // full security confirmation contract is still incomplete.
+      const [incompleteFinding] = await sql`SELECT * FROM findings WHERE id = ${findingId}`;
+      assert.equal(await createVerifyRound(sql, {
+        projectId, canvasId, finding: incompleteFinding as Record<string, unknown>,
+        parentJobId: testJobId, followupDepth: 2, priorityBase: 0,
+      }), null);
+      const [incomplete] = await sql`
+        SELECT status, verify_job_id, final_outcome, requirements_json, evidence_snapshot_json
+        FROM finding_verification_rounds WHERE finding_id = ${findingId}`;
+      assert.equal(incomplete.status, "pending");
+      assert.equal(incomplete.verify_job_id, null);
+      assert.equal(incomplete.final_outcome, null);
+      const missing = (incomplete.requirements_json as Record<string, unknown>).required_missing as string[];
+      for (const field of ["impact_flow", "attempted_refutation", "qualified_test_artifact_refs"]) {
+        assert.ok(missing.includes(field), `expected security requirement: ${field}`);
+      }
+      const incompleteStrategy = (incomplete.evidence_snapshot_json as Record<string, unknown>).strategy as Record<string, unknown>;
+      assert.equal((incompleteStrategy.gate as Record<string, unknown>).result, "passed");
+      assert.equal(incompleteStrategy.ok, false);
+      assert.equal((await sql`SELECT verify_status FROM findings WHERE id = ${findingId}`)[0].verify_status, "pending");
+      assert.equal((await canvasFindingsConverged(sql, canvasId, { projectId })).ok, false);
+
+      await sql`
+        UPDATE findings SET raw_json = raw_json || ${sql.json({ impact: {
+          attacker_entry: "Authenticated cross-user record request",
+          victim_resource: "Another user's private record",
+          impact_flow: "Attacker-supplied record ID reaches victim data without an ownership check",
+        } })} WHERE id = ${findingId}`;
+      await sql`
+        UPDATE canvas_nodes SET body_json = jsonb_set(body_json, '{verification}',
+          body_json->'verification' || ${sql.json({
+            artifact_refs: [{ uri: "shared://verify-eligibility/cross-user-response.log", sha256: "ab".repeat(32) }],
+            attempted_refutation: ["Unauthenticated control returned 401; switching between two authenticated owners still exposed the other owner's record"],
+          })})
+        WHERE id = ${testNode.id as string}`;
       const [qualifiedFinding] = await sql`SELECT * FROM findings WHERE id = ${findingId}`;
       const qualified = await createVerifyRound(sql, {
         projectId,

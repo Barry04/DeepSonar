@@ -1,105 +1,65 @@
-export const DSH_SMOKE_PROVIDER = "deepsonar-smoke";
-export const DSH_SMOKE_MODEL = "cordis-boot-only";
+// Structural parity with production dsh-profile.ts is checked by runtime-adapters.test.ts.
+export const DSH_VERSION = "0.2.0-rc.2";
+export const DSH_HOME = "/workspace/.deepsonar-home/.dsh";
+export const DSH_PROFILE = "deepsonar";
+export const DSH_BIN = "/opt/deepsonar/dsh/node_modules/@deepseek-ai/dsh/lib/bin.js";
+export const DSH_PROFILE_MANIFEST = JSON.stringify({ private: true, dsh: { profile: { bundles: [] } } });
 
-/**
- * Standard-mode counterpart of runtime-adapters.ts materializeDsh().
- *
- * This deliberately carries the complete UI-less platform composition so a
- * packaged-bin boot validates every configured plugin against the versions
- * installed in the runtime image. No prompt is sent and the unreachable model
- * endpoint must never be called.
- */
-export function buildDshCordisSmokeConfig() {
-  const providerConfig = {
-    providers: {
-      [DSH_SMOKE_PROVIDER]: {
-        api: "openai-responses",
-        apiKeyEnv: "DEEPSONAR_GATEWAY_TOKEN",
-        baseURL: "http://127.0.0.1:1/gateway",
-        models: [{ id: DSH_SMOKE_MODEL }],
-      },
-    },
+/** A closed plugin tree, never the SDK/base defaults: no UI, credentials, uploads,
+ * native provider, plugin manager, arbitrary bundles or configuration watching. */
+export function buildDshProfilePatch(options) {
+  const home = options.home ?? DSH_HOME;
+  const rows = [];
+  const add = (id, name = id, config, inject) => {
+    rows.push({ id, name: `@deepseek-ai/dsh-${name}`, ...(config ? { config } : {}), ...(inject ? { inject } : {}) });
   };
-  return `# DeepSonar governed unattended DSH composition. No UI plugins.
-- id: sdk-jsonrpc-server
-  name: '@deepseek-ai/dsh-sdk-jsonrpc-server'
-  config:
-    maxTokensAsSuccess: true
+  add("sdk-app-startup", "sdk-app", { profile: DSH_PROFILE });
+  add("sdk-jsonrpc-server", "sdk-jsonrpc-server", { maxTokensAsSuccess: true }, ["sdkAppStartup", "loader"]);
+  rows.push({ id: "timer", name: "@deepseek-ai/cordis-plugin-timer" });
+  for (const id of ["llm", "session", "session-projection", "agent", "llm-retry", "mcp-resources"]) add(id);
+  add("jobs", "jobs-local");
+  add("invariants");
+  for (const id of ["session", "agent", "scope", "agent-loop"]) add(`${id}-invariant`, `${id}/invariant`);
+  add("system-prompt", "system-prompt", {
+    includeHarnessIdentity: false, includeRuntimeContext: false, personaPrefix: "__DEEPSONAR_DSH_SYSTEM_PROMPT__",
+  });
+  add("tools", "tools", { mode: options.taskMode === "ptc" ? "ptc" : "native" });
+  add("agent-loop", "agent-loop", { agents: [] });
+  add("llm-pi-ai", "llm-pi-ai", options.providerConfig);
+  add("sandbox", "sandbox-local");
+  add("sandbox-policy", "sandbox-policy", { mode: "danger-full-access", workspaceRoot: options.cwd });
+  add("subprocess", "subprocess-local");
+  add("shell-env");
+  add("bash-local", "bash-local", { cwd: options.cwd, timeoutMs: 300000 });
+  add("fs-local", "fs-local", { cwd: options.cwd });
+  add("tool-bash", "tool-bash", { enableRunInBackground: true });
+  add("fs-observation-policy");
+  add("tool-fs");
+  add("tool-fs-search", "tool-fs-search", { sampleOverCapGlobResults: false });
+  add("str-replace-editor", "tool-str-replace-editor", { maxOutputChars: 16000 });
+  add("skill");
+  // Only Scheduler-materialized skills; a repository cannot add a discovery root.
+  add("skill-filesystem", "skill-filesystem", { includeDefaultRoots: false, customSkillDirs: [`${home}/skills`] });
+  add("tool-skill");
+  add("subagent");
+  add("subagent-spawn-in-process", "subagent-spawn-in-process", { providerName: "spawn" });
+  add("subagent-fork-in-process", "subagent-fork-in-process", { providerName: "fork" });
+  add("tool-subagent", "tool-subagent", { provider: "spawn", toolName: "subagent", backgroundMode: "continuable" });
+  add("tool-subagent-control");
+  add("tool-subagent-list-agents", "tool-subagent-control/list-agents");
+  add("tool-subagent-fork", "tool-subagent", { provider: "fork", toolName: "subagent_fork", backgroundMode: "one-shot" });
+  add("sessions", "session-persistence-jsonl", { root: `${home}/sessions`, compression: "none" });
+  add("session-checkpoints", "session-checkpoint-policy");
+  add("token-meter");
+  add("compaction-basic", "compaction-basic", { thresholdRatio: 0.8, retainRatio: 0.16, maxTokens: 8192, compactionRetries: 1 });
+  if (options.taskMode === "ptc") add("ptc-runtime", "ptc-runtime-node");
+  return JSON.stringify([{ insert: rows.map(row => row.id === "system-prompt" ? { ...row, config: { ...row.config, personaPrefix: "DeepSonar isolated SDK smoke" } } : row) }], null, 2);
+}
 
-- id: llm-pi-ai
-  name: '@deepseek-ai/dsh-llm-pi-ai'
-  config: ${JSON.stringify(providerConfig)}
-
-- id: reasoning-settings
-  name: dsh-reasoning-settings
-  config:
-    subagentRouting: true
-    inheritRoute: true
-    resolveModelOnly: true
-    inheritReasoning: true
-
-- id: sandbox
-  name: '@deepseek-ai/dsh-sandbox-local'
-
-- id: sandbox-policy
-  name: '@deepseek-ai/dsh-sandbox-policy'
-  config:
-    mode: danger-full-access
-    workspaceRoot: !!js process.env.DSH_CWD ?? process.cwd()
-
-- id: subprocess
-  name: '@deepseek-ai/dsh-subprocess-local'
-
-- id: bash-local
-  name: '@deepseek-ai/dsh-bash-local'
-  config:
-    cwd: !!js process.env.DSH_CWD ?? process.cwd()
-    timeoutMs: 300000
-
-- id: fs-local
-  name: '@deepseek-ai/dsh-fs-local'
-  config:
-    cwd: !!js process.env.DSH_CWD ?? process.cwd()
-
-- id: agent-spine
-  name: '@deepseek-ai/dsh-agent-spine-demo'
-  config:
-    dshHome: !!js process.env.DSH_HOME ?? '/workspace/.deepsonar-home/.dsh'
-    includeHarnessIdentity: false
-    includeRuntimeContext: false
-    persona: !!js process.env.DSH_SYSTEM_PROMPT ?? 'You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.'
-    tools:
-      mode: native
-    workspaceContext: false
-    skills:
-      enabled: true
-    toolBash:
-      enableRunInBackground: true
-    toolJobs: false
-
-- id: str-replace-editor
-  name: '@deepseek-ai/dsh-tool-str-replace-editor'
-  config:
-    maxOutputChars: 16000
-
-- id: sessions
-  name: '@deepseek-ai/dsh-session-persistence-jsonl'
-  config:
-    root: !!js process.env.DSH_SESSION_ROOT ?? './.sessions'
-    compression: none
-
-- id: session-checkpoints
-  name: '@deepseek-ai/dsh-session-checkpoint-policy'
-
-- id: token-meter
-  name: '@deepseek-ai/dsh-token-meter'
-
-- id: compaction-basic
-  name: '@deepseek-ai/dsh-compaction-basic'
-  config:
-    thresholdRatio: 0.8
-    retainRatio: 0.16
-    maxTokens: 8192
-    compactionRetries: 1
-`;
+export const DSH_SMOKE_PROVIDER = "deepsonar-smoke";
+export const DSH_SMOKE_MODEL = "cordis-smoke";
+export function buildDshCordisSmokeConfig({ cwd = "/workspace", home = DSH_HOME, taskMode = "standard", baseURL = "http://127.0.0.1:1/gateway" } = {}) {
+  return buildDshProfilePatch({ cwd, home, taskMode, providerConfig: {
+    providers: { [DSH_SMOKE_PROVIDER]: { api: "openai-completions", apiKeyEnv: "DEEPSONAR_GATEWAY_TOKEN", baseURL, reasoning: "high", models: [{ id: DSH_SMOKE_MODEL, reasoningEfforts: { high: "high" } }] } },
+  } });
 }

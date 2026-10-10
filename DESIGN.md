@@ -186,7 +186,7 @@ Research 失败必须显式记录并保留候选 Finding。与 Finding/报告写
 
 ### 6.3 Projection
 
-Finding 变为 `confirmed` 后，Scheduler 生成冻结输入的 Finding Report；Canvas 收敛后生成版本化 Task Report。相同输入幂等，输入变化追加版本，生成失败只更新报告行，不改写 Finding 状态。SARIF 和其它外部格式是 Projection，不是内部写入真相。
+Finding 变为 `confirmed` 后，Scheduler 生成冻结输入的 Finding Report；Canvas 收敛后生成版本化 Task Report。相同输入幂等，输入变化追加版本，生成失败只更新报告行，不改写 Finding 状态。SARIF 和其它外部格式是 Projection，不是内部写入真相。 Task Report 的覆盖门逐项核对精确且唯一的 Finding ID 是否位于正确状态二级章节，标题或“待人工”等词不能代替覆盖。缺项、错栏、重复 ID 或数值口径失真时，从冻结输入生成确定性完整模板，保留全部 Finding ID；模型 `summary` 的 8192 UTF-8 字节上限不限制最终模板报告，长输入允许模型只提交有界摘要。
 
 ## 7. Job、Attempt 和恢复
 
@@ -214,6 +214,8 @@ Lease 和 Reaper 由 Scheduler 判定超时与孤儿，不能信任 Agent 自报
 
 运行时由 `packages/runtime-sandbox` 的 `SandboxRunner` / `RuntimeHost` 抽象，当前有 Noop 和 OpenSandbox 实现。每个 Job 使用新的 `/workspace`、独立可写 HOME、冻结的 CLI/provider/model、治理后的 Gateway、镜像 key + digest、工具清单和网络策略。Pi 快照的 `model` 是 CLI `--model` 接受的目录 id，`pi_provider` 是已认证 `models.json` 路由；`deepsonar/<id>` 只表示 Provider 路由，adapter 必须映射为 `--provider <route> --model <id>` 后再启动。目录 id 在多个已认证路由间有歧义且无法唯一确定时，快照解析 / claim 启动在 provision 前以 `PI_MODEL_UNAVAILABLE` 失败。real Job 的模型请求经 Scheduler-owned Model Gateway（实现注释中的历史 §6.3）；长期 Provider 密钥不进入 Job 快照、Session 或工作区。
 
+**DSH 当前 as-built（2026-10-10）：** 新执行版本是官方 `@deepseek-ai/dsh@0.2.0-rc.2`，选择官方 [`dsh-v0.2.0-rc.2`](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.0-rc.2)；`0.2.1-alpha.2`（Oct 9）未选。版本与完整 npm closure 锁在 `agent-harness/dsh-runtime/package-lock.json`，镜像在 `/opt/deepsonar/dsh` 以 `npm ci --omit=dev --ignore-scripts --no-audit --no-fund` 安装，唯一 launcher 是官方 `dsh --profile`。`packages/runtime-sandbox/src/dsh-profile.ts` 为 `deepsonar` profile 写入 `bundles: []` 和显式 plugin allowlist，移除 spine、UI/web、settings/credential discovery、native DeepSeek routes、plugin-manager、telemetry 与 home overrides；安装包内 dormant UI 依赖不会启动服务。Standard 使用 native tools，PTC 使用 `ptc` 与 `@deepseek-ai/dsh-ptc-runtime-node` 的 `run_code`。Provider route/model 强制经 Model Gateway，沙箱只得到短期 token；skills 只从 Scheduler home 的 `${DSH_HOME}/skills` 根发现。`session.v4.jsonl` 是当前精确归档路径，历史 v0–v3 仅供 viewer 读取。官方 JSON-RPC 只提供 initialize/prompt/shutdown；同进程 follow-up 可用，跨进程持久 resume 不支持，adapter 以 `persistentSessionResume: false` 返回 `CONTEXT_RESUME_UNSUPPORTED`，不静默新建或重试。
+
 **Model Gateway 目录校验与 alias 语义（#570）：** 解析顺序为 RoleConfig.model → Credential `settings_config` → Agent CLI 内置默认（如 Claude Code → `claude-opus-5`）。若凭据 `model_catalog_json` 非空，冻结快照前把解析结果与目录比对：不在目录则 fail-closed，中文错误列出可选项。空目录视为探测软降级，不拦 Job。显式 alias 直通可关闭校验：平台 env `DEEPSONAR_ALLOW_MODEL_CATALOG_PASSTHROUGH=true`，或管理员级项目 Agent allowlist `allow_model_catalog_passthrough`（#697 起 RoleConfig 字段不再授权）。角色/settings 未指定 model 时，快照冻结 `upstream_model = "cli-default:<name>"`（详情页展示「未指定 → CLI 默认 …（经凭据 alias 转发，实际模型不可观测）」）；运行时 concurrency / Gateway 出站会剥掉 `cli-default:` 前缀。`job_usage_ledger.model` 仍记请求协议值；`model_catalog_match` 标注是否命中目录；可选 `upstream_reporting_model` 尽力从上游响应读取，无字段不强行伪造。
 
 运行镜像必须来自已准入市场。第三方镜像先经 `apps/image-admission` 扫描、批准，再由平台绑定可见项目后项目启用；Agent 不能提交任意 OCI 地址。镜像和平台版本分开管理，执行永远使用不可变 digest，不使用可变 `latest`。出网权限在 Canvas/Job 快照中冻结，禁止出网的沙箱只能通过固定 Gateway 访问模型。
@@ -230,7 +232,7 @@ Lease 和 Reaper 由 Scheduler 判定超时与孤儿，不能信任 Agent 自报
 
 人工消息进入 durable inbox ledger，附件先写共享资产再按 message UUID 注入 `/workspace/.deepsonar/inbox/`。`injected` 与显式 ACK 分离；waiting-human 回复会关闭旧 Attempt、恢复 Job 为 pending 并重新唤醒 Dispatcher。普通文本、Session 标题和节点名称都不能伪造 ACK。
 
-Session 查看器按 CLI 方言解析 reasoning、message、tool call/result、usage 和广播注入，保留原始归档下载。Session usage 与 Gateway `job_usage_ledger` 是两套口径，不互相冒充定价或对账结果。
+Session 查看器按 CLI 方言解析 reasoning、message、tool call/result、usage 和广播注入，保留原始归档下载。DSH 当前只捕获精确 `sessions/<project>/<sessionId>/session.v4.jsonl`，历史 viewer 仍可读取旧代归档。Session usage 与 Gateway `job_usage_ledger` 是两套口径，不互相冒充定价或对账结果。
 
 ## 10. 前端信息架构
 

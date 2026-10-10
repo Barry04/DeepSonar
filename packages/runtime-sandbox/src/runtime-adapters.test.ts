@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { parse } from "yaml";
+import { buildDshProfilePatch, DSH_PROFILE_MANIFEST } from "./dsh-profile.js";
 import { preferInnerJsonErrorMessage } from "./embedded-error-message.js";
 import {
   DSH_PI_COMPAT_SYSTEM_PROMPT,
@@ -48,11 +50,11 @@ function fakeSandbox(): {
       commands.push(command);
       envs.push(options.env ?? {});
       ptys.push(options.pty);
-      return {} as never;
+      return { exitCode: 0, stdout: "", stderr: "" } as never;
     },
     run: async (command: string) => {
       runCommands.push(command);
-      return {} as never;
+      return { exitCode: 0, stdout: "", stderr: "" } as never;
     },
     uploadFile: async (content: string, path: string) => {
       uploads.push({ path, content });
@@ -169,13 +171,13 @@ test("DSH adapter uses the official unattended JSON-RPC runtime", async () => {
   } as const;
   await adapter.start(context);
   const startCommand = fake.commands[0] ?? "";
-  assert.match(startCommand, /DSH_SYSTEM_PROMPT="\$\( \{ printf '%s\\n\\n' 'You are an expert coding assistant operating inside pi, a coding agent harness\. You help users by reading files, executing commands, editing code, and writing new files\.'; cat '\/workspace\/\.deepsonar\/system-prompt\.txt'; \} \)" node \/usr\/local\/lib\/node_modules\/@deepseek-ai\/dsh-sdk-jsonrpc-demo\/lib\/packaged-bin\.js /);
+  assert.match(startCommand, /DSH_SYSTEM_PROMPT="\$\( \{ printf '%s\\n\\n' 'You are an expert coding assistant operating inside pi, a coding agent harness\. You help users by reading files, executing commands, editing code, and writing new files\.'; cat '\/workspace\/\.deepsonar\/system-prompt\.txt'; \} \)" node \/opt\/deepsonar\/dsh\/node_modules\/@deepseek-ai\/dsh\/lib\/bin\.js --profile deepsonar/);
   assert.match(startCommand, /operating inside pi/);
   assert.doesNotMatch(startCommand, /DSH_SYSTEM_PROMPT="\$\(cat /);
-  assert.equal(adapter.version, "0.1.1-rc.2");
+  assert.equal(adapter.version, "0.2.0-rc.2");
   assert.deepEqual(adapter.compatibleImageKeys, ["deepsonar-base", "deepsonar-audit", "deepsonar-kali-minimal"]);
   assert.equal(fake.envs[0]?.DSH_HOME, "/workspace/.deepsonar-home/.dsh");
-  assert.equal(fake.envs[0]?.DSH_CORDIS_CONFIG, "/workspace/.deepsonar-home/.dsh/deepsonar.cordis.yml");
+  assert.equal(fake.envs[0]?.DSH_CORDIS_CONFIG, undefined);
   assert.equal(fake.envs[0]?.DSH_SESSION_ROOT, "/workspace/.deepsonar-home/.dsh/sessions");
   assert.equal(fake.envs[0]?.DSH_CWD, "/workspace");
   assert.equal(fake.envs[0]?.DSH_MODEL, "gpt-5.6");
@@ -183,8 +185,9 @@ test("DSH adapter uses the official unattended JSON-RPC runtime", async () => {
   assert.equal(fake.envs[0]?.DSH_TELEMETRY_DISABLED, "1");
   assert.equal(fake.envs[0]?.DSH_PERMISSION_MODE, "danger-full-access");
   assert.equal(adapter.capabilities.incrementalMessages, true);
-  await adapter.resume({ ...context, sessionId: "session-existing" });
-  assert.equal(fake.commands[1], fake.commands[0]);
+  assert.equal(adapter.persistentSessionResume, false);
+  await assert.rejects(adapter.resume({ ...context, sessionId: "session-existing" }), /CONTEXT_RESUME_UNSUPPORTED/);
+  assert.equal(fake.commands.length, 1);
 
   const projected = fakeSandbox();
   await adapter.start({
@@ -204,7 +207,7 @@ test("DSH JSON-RPC initializes, continues one session, and shuts down", () => {
   const adapter = AGENT_CLI_RUNTIME_ADAPTERS.dsh;
   const state = { sessionId: undefined as string | undefined, contextIdentity: {
     context_id: "ctx_0123456789abcdef0123456789abcdef", context_revision: 0,
-    adapter_id: "dsh", adapter_version: "0.1.1-rc.2", runtime_identity: "runtime",
+    adapter_id: "dsh", adapter_version: "0.2.0-rc.2", runtime_identity: "runtime",
     transform_chain_digest: `sha256:${"a".repeat(64)}`,
   }, model: "gpt-5.6", modelProvider: "xxxx", cwd: "/workspace" };
   const init = JSON.parse(adapter.encodeInput("first", state).trim()) as Record<string, unknown>;
@@ -279,45 +282,37 @@ test("DSH materializes a governed UI-less Cordis composition", async () => {
     mcpConfigPath: "/workspace/.deepsonar/mcp.json",
   } as const;
   await adapter.materialize?.(context);
-  assert.equal(fake.uploads.length, 1);
-  assert.equal(fake.uploads[0]?.path, "/workspace/.deepsonar-home/.dsh/deepsonar.cordis.yml");
-  const config = fake.uploads[0]?.content ?? "";
+  assert.equal(fake.uploads.length, 4);
+  assert.equal(fake.uploads[0]?.path, "/workspace/.deepsonar-home/.dsh/profiles/deepsonar/package.json");
+  assert.equal(fake.uploads[0]?.content, DSH_PROFILE_MANIFEST);
+  assert.equal(fake.uploads[1]?.path, "/workspace/.deepsonar-home/.dsh/profiles/deepsonar/cordis.patch.yml");
+  assert.equal(fake.uploads[2]?.content, "[]\n");
+  assert.equal(fake.uploads[3]?.content, "");
+  const config = fake.uploads[1]?.content ?? "";
   assert.match(config, /@deepseek-ai\/dsh-sdk-jsonrpc-server/);
-  assert.match(config, /@deepseek-ai\/dsh-agent-spine-demo/);
   assert.match(config, /@deepseek-ai\/dsh-session-persistence-jsonl/);
   assert.match(config, /@deepseek-ai\/dsh-compaction-basic/);
-  assert.match(config, /name: '@deepseek-ai\/dsh-subprocess-local'/);
-  assert.match(config, /skills:\n\s+enabled: true/);
-  assert.match(config, /tools:\n\s+mode: native/);
-  // rc.6 declares toolBash as false | object; boolean true is invalid.
-  assert.match(config, /toolBash:\n\s+enableRunInBackground: true/);
-  assert.doesNotMatch(config, /toolBash: true/);
-  assert.doesNotMatch(config, /- id: bash\n/);
-  assert.match(config, /name: '@deepseek-ai\/dsh-bash-local'\n\s+config:\n\s+cwd:[\s\S]*?timeoutMs: 300000/);
-  assert.match(config, /^\s+toolJobs: false$/mu);
-  assert.match(config, /^\s+workspaceContext: false$/mu);
-  assert.doesNotMatch(config, /dsh-code-runtime-worker-thread/);
+  assert.match(config, /@deepseek-ai\/dsh-subprocess-local/);
+  assert.match(config, /mode: native/);
+  assert.match(config, /enableRunInBackground: true/);
+  assert.match(config, /includeDefaultRoots: false/);
+  assert.match(config, /customSkillDirs:/);
+  assert.match(config, /includeHarnessIdentity: false/);
+  assert.match(config, /includeRuntimeContext: false/);
   assert.match(config, /@deepseek-ai\/dsh-llm-pi-ai/);
-  assert.match(config, /name: dsh-reasoning-settings/);
-  assert.match(config, /inheritReasoning: true/);
-  assert.match(config, /"xxxx"/);
-  assert.doesNotMatch(config, /dsh-llm-deepseek/);
-  assert.doesNotMatch(config, /"reasoning"/);
-  assert.match(config, /dshHome: !!js process\.env\.DSH_HOME \?\? '\/workspace\/\.deepsonar-home\/\.dsh'/);
+  assert.match(config, /xxxx:/);
   assert.match(config, /operating inside pi/);
-  assert.doesNotMatch(config, /You are a software engineering agent/);
-  assert.match(config, /root: !!js process\.env\.DSH_SESSION_ROOT/);
-  assert.doesNotMatch(config, /dsh-(?:app-tui|app-web|web-search|ask-user|theme)|telemetry-otel/);
-
+  assert.doesNotMatch(config, /dsh-(?:agent-spine-demo|code-runtime|app-tui|app-web|web-search|ask-user|credentials|settings|plugin-manager|session-log-deepseek)|telemetry-otel/);
   await adapter.materialize?.({ ...context, dshTaskMode: "ptc", reasoning: "max", dshProvider: testDshProvider("max") });
-  const ptcConfig = fake.uploads[1]?.content ?? "";
-  assert.match(ptcConfig, /tools:\n\s+mode: code/);
-  assert.match(ptcConfig, /@deepseek-ai\/dsh-code-runtime-worker-thread/);
-  assert.match(ptcConfig, /"reasoning":"max"/);
+  const ptcConfig = fake.uploads[5]?.content ?? "";
+  assert.match(ptcConfig, /mode: ptc/);
+  assert.match(ptcConfig, /@deepseek-ai\/dsh-ptc-runtime-node/);
+  assert.match(ptcConfig, /reasoning: max/);
   await adapter.materialize?.({ ...context, reasoning: "high", dshProvider: testDshProvider("high") });
-  const mappedConfig = fake.uploads[2]?.content ?? "";
-  assert.match(mappedConfig, /"reasoning":"high"/);
-  assert.match(mappedConfig, /"reasoningEfforts":\{"low":"low","high":"high","max":"thinking-v2\.5"\}/);
+  const mappedConfig = fake.uploads[9]?.content ?? "";
+  assert.match(mappedConfig, /reasoning: high/);
+  assert.match(mappedConfig, /max: thinking-v2\.5/);
+
 });
 
 test("Pi JSONL framing 跨任意 UTF-8 分块并保留 Unicode 行分隔符数据", () => {
@@ -409,7 +404,7 @@ test("Pi RPC 固定启动参数、状态查询和精确 sessionFile 恢复", asy
   } as const;
   await adapter.start(context);
   await adapter.resume({ ...context, input: "follow", sessionId: "pi-s1", sessionFile: "/workspace/.deepsonar-home/.pi/agent/s.jsonl" });
-  assert.match(fake.commands[0] ?? "", /^pi --mode rpc --no-approve --no-extensions --session-dir \/workspace\/\.deepsonar-home\/\.pi\/agent/);
+  assert.match(fake.commands[0] ?? "", /^pi --mode rpc --no-approve --no-extensions/);
   assert.doesNotMatch(fake.commands[0] ?? "", /mcp|control-mcp/);
   assert.match(fake.commands[0] ?? "", /--thinking 'high'/);
   assert.match(fake.commands[1] ?? "", /--thinking 'high'/);
@@ -725,9 +720,9 @@ function loadJsonlFixture(name: string): Record<string, unknown>[] {
     .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
-test("Pi 0.84.4 runtime fixture covers required decode fields and unknown frames", () => {
+test("Pi terminal-error runtime fixture covers required decode fields and unknown frames", () => {
   const adapter = AGENT_CLI_RUNTIME_ADAPTERS.pi;
-  assert.equal(adapter.version, "0.85.1");
+  assert.equal(adapter.version, "1.1.0");
   const state: Record<string, unknown> = {};
   const decoded = loadJsonlFixture("pi-0.84.4.runtime.jsonl").flatMap((line) => adapter.decodeOutput(line, state));
   assert.equal(state.sessionId, "pi-sess-0844");
@@ -738,45 +733,44 @@ test("Pi 0.84.4 runtime fixture covers required decode fields and unknown frames
   assert.ok(decoded.some((event) => event.type === "tool_progress"));
   assert.ok(decoded.some((event) => event.type === "user" && JSON.stringify(event).includes("tool_result")));
   assert.ok(decoded.some((event) => event.is_error === true && String(event.result).includes("无效的令牌")));
-  assert.ok(decoded.some((event) => event.type === "agent_settled"));
+  assert.equal(decoded.some((event) => event.type === "agent_settled"), false);
   assert.ok(decoded.some((event) => event.type === "unknown_runtime"));
   assert.throws(() => parsePiJsonlRecord(JSON.stringify({ type: "future_unknown_event" })), /PI_RPC_UNEXPECTED_EVENT/);
 });
 
-test("DSH 0.1.1-rc.2 runtime fixture covers required decode fields and unknown frames", () => {
+test("DSH 0.2.0-rc.2 runtime fixture covers required decode fields and unknown frames", () => {
   const adapter = AGENT_CLI_RUNTIME_ADAPTERS.dsh;
-  assert.equal(adapter.version, "0.1.1-rc.2");
+  assert.equal(adapter.version, "0.2.0-rc.2");
   const state = {
-    sessionId: "session-dsh-011rc2",
+    sessionId: "session-dsh-020rc2",
     dshInitializeRequestId: "deepsonar-initialize-1",
     dshInitialInput: "检查入口",
     cwd: "/workspace",
   };
-  const decoded = loadJsonlFixture("dsh-0.1.1-rc.2.runtime.jsonl").flatMap((line) => adapter.decodeOutput(line, state));
+  const decoded = loadJsonlFixture("dsh-0.2.0-rc.2.runtime.jsonl").flatMap((line) => adapter.decodeOutput(line, state));
   assert.ok(decoded.some((event) => event.type === "runtime_outbound"));
-  assert.ok(decoded.some((event) => contentType(event) === "text" && JSON.stringify(event).includes("先检查入口")));
-  assert.ok(decoded.some((event) => contentType(event) === "thinking"));
+  assert.ok(decoded.some((event) => contentType(event) === "text" && JSON.stringify(event).includes("standard-final")));
+  assert.ok(decoded.some((event) => JSON.stringify(event).includes('"type":"thinking"')));
   assert.ok(decoded.some((event) => event.type === "assistant" && JSON.stringify(event).includes("tool_use")));
   assert.ok(decoded.some((event) => event.type === "user" && JSON.stringify(event).includes("tool_result")));
-  assert.ok(decoded.some((event) => event.is_error === true && String(event.result).includes("unauthorized client detected")));
-  assert.ok(decoded.some((event) => event.type === "agent_settled" && event.session_id === "session-dsh-011rc2"));
-  assert.equal(decoded.filter((event) => event.type === "unknown_runtime").length, 2);
+  assert.ok(decoded.some((event) => event.type === "agent_settled" && event.session_id === "session-dsh-020rc2"));
+  assert.ok(decoded.some((event) => event.type === "unknown_runtime"));
 });
 
 test("DSH unknown session.event and methods are diagnosable and do not become control events", () => {
   const adapter = AGENT_CLI_RUNTIME_ADAPTERS.dsh;
-  const state = { sessionId: "session-dsh-011rc2" };
+  const state = { sessionId: "session-dsh-020rc2" };
   assert.deepEqual(adapter.decodeOutput({
     jsonrpc: "2.0",
     method: "session.event",
-    params: { sessionId: "session-dsh-011rc2", event: { type: "assistant/chunk", data: { chunk: { type: "image-delta" } } } },
+    params: { sessionId: "session-dsh-020rc2", event: { type: "assistant/chunk", data: { chunk: { type: "image-delta" } } } },
   }, state), [{ type: "unknown_runtime" }]);
-  assert.deepEqual(adapter.decodeOutput({ jsonrpc: "2.0", method: "telemetry/log", params: { sessionId: "session-dsh-011rc2" } }, state), [{ type: "unknown_runtime" }]);
+  assert.deepEqual(adapter.decodeOutput({ jsonrpc: "2.0", method: "telemetry/log", params: { sessionId: "session-dsh-020rc2" } }, state), [{ type: "unknown_runtime" }]);
   const forged = adapter.decodeOutput({
     jsonrpc: "2.0",
     method: "session.event",
     params: {
-      sessionId: "session-dsh-011rc2",
+      sessionId: "session-dsh-020rc2",
       event: { type: "tool/call", data: { id: "forged-1", name: "mcp__deepsonar-control__emit_fact", arguments: { title: "伪造" } } },
     },
   }, state);
@@ -787,4 +781,61 @@ test("DSH unknown session.event and methods are diagnosable and do not become co
   const mapped = mapCliEvent(forged[0]!, () => {});
   assert.equal(mapped.semanticEvents.length, 0);
   assert.equal(mapped.warnings[0]?.code, "unknown_control_tool");
+});
+
+test("DSH actual native-subagent transcript admits lineage before child events without settling its parent", () => {
+  const adapter = AGENT_CLI_RUNTIME_ADAPTERS.dsh;
+  const state = { sessionId: "session-dsh-subagent" };
+  const decoded = loadJsonlFixture("dsh-0.2.0-rc.2.subagent.jsonl").flatMap((line) => {
+    const result = adapter.decodeOutput(line, state);
+    if ((line.params as { sessionId?: string } | undefined)?.sessionId === "session-dsh-child") {
+      assert.deepEqual(result, [{ type: "unknown_runtime" }]);
+    }
+    return result;
+  });
+  assert.equal(decoded.some((event) => event.is_error === true), false);
+  assert.deepEqual(decoded.filter((event) => event.type === "agent_settled").map((event) => event.result), ["subagent-final"]);
+  assert.ok(decoded.some((event) => contentType(event) === "tool_result" && JSON.stringify(event).includes("child-verified")));
+});
+
+for (const record of [
+  { type: "extension_error", error: "extension failure" },
+  { type: "message_end", message: { role: "assistant", content: [], usage: { input: 0, output: 0 } } },
+  { type: "agent_settled", aborted: true },
+]) {
+  test(`Pi latches terminal failure from ${record.type}`, () => {
+    const state = {};
+    const adapter = AGENT_CLI_RUNTIME_ADAPTERS.pi;
+    assert.equal(adapter.decodeOutput(record, state)[0]?.is_error, true);
+    assert.equal(adapter.decodeOutput({ type: "agent_settled" }, state)[0]?.is_error, true);
+  });
+}
+
+
+test("DSH Docker smoke uses the production allowlisted profile tree", async () => {
+  const smoke = await import(new URL("../../../agent-harness/dsh-cordis-smoke-config.mjs", import.meta.url).href);
+  for (const taskMode of ["standard", "ptc"] as const) {
+    const providerConfig = { providers: { smoke: { api: "openai-completions" } } };
+    const options = { taskMode, cwd: "/workspace", providerConfig };
+    const production = parse(buildDshProfilePatch(options).replace(/^\s+personaPrefix:.*$/mu, "        personaPrefix: DeepSonar isolated SDK smoke"));
+    assert.deepEqual(production, JSON.parse(smoke.buildDshProfilePatch(options)));
+  }
+});
+
+test("DSH RC rejects unscoped lifecycle and keeps child status separate", () => {
+  const adapter = AGENT_CLI_RUNTIME_ADAPTERS.dsh;
+  const state = { sessionId: "session-parent" };
+  for (const method of ["session.event", "session.status"]) {
+    for (const sessionId of [undefined, "", "session-other"]) {
+      const decoded = adapter.decodeOutput({ jsonrpc: "2.0", method, params: { sessionId, status: "idle" } }, state);
+      assert.equal(decoded[0]?.result, "DSH_JSONRPC_SESSION_MISMATCH");
+    }
+  }
+  assert.deepEqual(adapter.decodeOutput({ jsonrpc: "2.0", method: "subagent.started", params: { parentSessionId: "session-parent", childSessionId: "child" } }, state), []);
+  assert.deepEqual(adapter.decodeOutput({ jsonrpc: "2.0", method: "session.status", params: { sessionId: "child", status: "idle" } }, state), [{ type: "unknown_runtime" }]);
+  const user = adapter.decodeOutput({ jsonrpc: "2.0", method: "session.event", params: { sessionId: "session-parent", event: { type: "user/message", data: { id: "user-id", role: "user", content: [{ type: "text", text: "RC direct message" }] } } } }, state);
+  assert.match(JSON.stringify(user), /RC direct message/);
+  const tool = adapter.decodeOutput({ jsonrpc: "2.0", method: "session.event", params: { sessionId: "session-parent", event: { type: "tool/result", data: { message: { id: "message-id", toolCallId: "call-id", isError: true, content: [{ type: "text", text: "failure" }] } } } } }, state);
+  assert.match(JSON.stringify(tool), /"tool_use_id":"call-id"/);
+  assert.match(JSON.stringify(tool), /"is_error":true/);
 });

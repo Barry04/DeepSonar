@@ -1,4 +1,5 @@
 import type { ContextIdentity } from "./context-contract.js";
+import { buildDshProfilePatch, DSH_BIN, DSH_HOME, DSH_PROFILE, DSH_PROFILE_MANIFEST, DSH_VERSION } from "./dsh-profile.js";
 import { buildDshPiAiRuntimeProjection, type DshPiAiRuntimeProjection } from "./dsh-pi-ai.js";
 import { DSH_PI_COMPAT_SYSTEM_PROMPT, formatDshTurnError, projectDshSystemPrompt } from "./dsh-request-frame.js";
 import { preferInnerJsonErrorMessage } from "./embedded-error-message.js";
@@ -62,7 +63,7 @@ export function resolvePiCliModelId(model: string | undefined | null): string | 
 }
 
 /**
- * Pi 0.85.1 rejects a bare catalog id when it exists on multiple built-in
+ * Pi 1.1.0 rejects a bare catalog id when it exists on multiple built-in
  * providers. Pass `--provider <route> --model <id>` (not `--model provider/id`).
  */
 export function resolvePiCliLaunchFlags(
@@ -122,6 +123,7 @@ export interface AdapterRuntimeState {
   dshInitializeRequestId?: string;
   dshTurnError?: string;
   dshInitialInput?: string;
+  dshChildSessionIds?: Set<string>;
   failed?: boolean;
   errorDetail?: string;
 }
@@ -133,6 +135,8 @@ export interface RuntimeAdapter {
   readonly capabilities: Readonly<AgentCliCapabilities>;
   readonly compatibleImageKeys: readonly string[];
   start(context: AdapterStartContext): Promise<RuntimeProcess>;
+  /** Whether the public protocol can reopen persisted state after process exit. */
+  persistentSessionResume: boolean;
   resume(context: AdapterResumeContext): Promise<RuntimeProcess>;
   materialize?(context: AdapterStartContext): Promise<void>;
   /** Vendor dialect → frozen runtime config. Only DSH implements this today. */
@@ -440,14 +444,15 @@ function sandboxClaude(
 
 const claude = Object.freeze<RuntimeAdapter>({
   id: "claude-code",
-  version: "2.1.258",
+  version: "2.1.296",
   outputMode: "jsonl",
   capabilities: fixedCapabilities({ streamEvents: true, platformControlApi: true, incrementalMessages: true, completionGate: true, sessionCapture: true, contextCompaction: true, contextCompactionPolicy: "automatic", reasoningEffort: true, interactiveTerminal: true }),
   compatibleImageKeys: ALL_IMAGE_KEYS,
-  // Claude Code 2.1.258 is the governed pin (npm latest). That
+  // Claude Code 2.1.296 is the governed pin (npm latest). That
   // contract supports partial stream-json frames; do not pass this flag to
   // an adapter whose pinned minimum does not support it.
   start: (context) => sandboxClaude(context.host, context),
+  persistentSessionResume: true,
   resume: (context) => sandboxClaude(context.host, context, context.sessionId),
   encodeInput: (content) => JSON.stringify({ type: "user", message: { role: "user", content } }) + "\n",
   decodeOutput: (line, state) => {
@@ -594,6 +599,7 @@ function decodePi(line: Record<string, unknown>, state: AdapterRuntimeState): Re
     const message = line.message && typeof line.message === "object" && !Array.isArray(line.message)
       ? line.message as Record<string, unknown>
       : undefined;
+    if (message?.role && message.role !== "assistant") return [];
     const stopReason = String(message?.stopReason ?? line.stopReason ?? "");
     if (stopReason === "error" || stopReason === "aborted") {
       const raw = piMessageEndErrorRaw(line, message);
@@ -604,17 +610,18 @@ function decodePi(line: Record<string, unknown>, state: AdapterRuntimeState): Re
     const unseen = text ? unseenCompleteText(state, "text", text) : undefined;
     if (unseen) state.finalText = `${state.finalText ?? ""}${unseen}`;
     if (!unseen && isEmptyPiModelResponse(message, state)) {
-      return [{ type: "result", subtype: "error", is_error: true, result: "PI_EMPTY_MODEL_RESPONSE" }];
+      return fail("PI_EMPTY_MODEL_RESPONSE");
     }
     return unseen ? [{ type: "assistant", message: { content: [{ type: "text", text: unseen }] } }] : [];
   }
   if (type === "agent_settled") {
+    if (line.aborted === true) return fail("Pi agent aborted");
     if (state.failed) return [{ type: "result", subtype: "error", is_error: true, result: state.errorDetail ?? "Pi runtime failed" }];
     return [{ type: "agent_settled", session_id: state.sessionId, session_file: state.sessionFile, result: state.finalText ?? "" }];
   }
   if (type === "agent_end") return [{ type: "agent_end" }];
   if (type === "error" || type === "extension_error") {
-    return [runtimeErrorResult(textFrom(line.error ?? line.message ?? line.errorMessage), "Pi runtime failed")];
+    return failRuntime(textFrom(line.error ?? line.message ?? line.errorMessage), "Pi runtime failed");
   }
   if (["tool_execution_start", "tool_execution_update", "tool_execution_end"].includes(type)) {
     const tool = line.toolCall && typeof line.toolCall === "object" && !Array.isArray(line.toolCall)
@@ -644,7 +651,7 @@ function sandboxPi(host: RuntimeHost, context: AdapterStartContext, sessionFile?
     }
     return ` -e ${shellQuote(extension)}`;
   }).join("");
-  let command = `pi --mode rpc --no-approve --no-extensions --session-dir /workspace/.deepsonar-home/.pi/agent${extensions}`;
+  let command = `pi --mode rpc --no-approve --no-extensions${extensions}`;
   if (sessionFile) command += ` --session ${shellQuote(sessionFile)}`;
   const launch = resolvePiCliLaunchFlags(context.model, context.modelProvider);
   if (launch.cliModel) command += ` --model ${shellQuote(launch.cliModel)}`;
@@ -656,7 +663,7 @@ function sandboxPi(host: RuntimeHost, context: AdapterStartContext, sessionFile?
 
 const pi = Object.freeze<RuntimeAdapter>({
   id: "pi",
-  version: "0.85.1",
+  version: "1.1.0",
   outputMode: "jsonl",
   capabilities: fixedCapabilities({
     streamEvents: true,
@@ -671,8 +678,11 @@ const pi = Object.freeze<RuntimeAdapter>({
   }),
   compatibleImageKeys: ALL_IMAGE_KEYS,
   start: (context) => sandboxPi(context.host, context),
-  resume: (context) => {
+  persistentSessionResume: true,
+  resume: async (context) => {
     if (!context.sessionFile) throw new Error("PI_SESSION_FILE_MISSING");
+    const check = await context.host.run(`test -s ${shellQuote(context.sessionFile)}`, { timeoutMs: 10_000 });
+    if (check.exitCode !== 0) throw new Error("PI_SESSION_FILE_MISSING_OR_EMPTY");
     return sandboxPi(context.host, context, context.sessionFile);
   },
   encodeInput: (content) => `${JSON.stringify({ type: "prompt", message: content })}\n`,
@@ -691,15 +701,12 @@ function dshSystemPromptAssignment(systemPromptPath?: string, projectedPrompt?: 
 
 function sandboxDsh(host: RuntimeHost, context: AdapterStartContext): Promise<RuntimeProcess> {
   if (!context.dshProvider) throw new Error("DSH_PROVIDER_CONFIG_MISSING");
-  const configPath = "/workspace/.deepsonar-home/.dsh/deepsonar.cordis.yml";
-  const packagedBin = "/usr/local/lib/node_modules/@deepseek-ai/dsh-sdk-jsonrpc-demo/lib/packaged-bin.js";
-  const command = `${dshSystemPromptAssignment(context.systemPromptPath, context.dshProvider.systemPrompt)}node ${packagedBin} ${configPath}`;
+  const command = `${dshSystemPromptAssignment(context.systemPromptPath, context.dshProvider.systemPrompt)}node ${DSH_BIN} --profile ${DSH_PROFILE}`;
   return host.runAsync(command, {
     cwd: context.cwd,
     env: {
       ...context.env,
       DSH_HOME: "/workspace/.deepsonar-home/.dsh",
-      DSH_CORDIS_CONFIG: configPath,
       DSH_SESSION_ROOT: "/workspace/.deepsonar-home/.dsh/sessions",
       DSH_CWD: context.cwd,
       DSH_MODEL: context.dshProvider.model,
@@ -712,97 +719,17 @@ function sandboxDsh(host: RuntimeHost, context: AdapterStartContext): Promise<Ru
 
 async function materializeDsh(context: AdapterStartContext): Promise<void> {
   if (!context.dshProvider) throw new Error("DSH_PROVIDER_CONFIG_MISSING");
-  const home = "/workspace/.deepsonar-home/.dsh";
-  const taskMode = context.dshTaskMode ?? "standard";
-  const codeRuntime = taskMode === "ptc"
-    ? `
-- id: code-runtime
-  name: '@deepseek-ai/dsh-code-runtime-worker-thread'
-`
-    : "";
-  const config = `# DeepSonar governed unattended DSH composition. No UI plugins.
-- id: sdk-jsonrpc-server
-  name: '@deepseek-ai/dsh-sdk-jsonrpc-server'
-  config:
-    maxTokensAsSuccess: true
-
-- id: llm-pi-ai
-  name: '@deepseek-ai/dsh-llm-pi-ai'
-  config: ${JSON.stringify(context.dshProvider.config)}
-
-- id: reasoning-settings
-  name: dsh-reasoning-settings
-  config:
-    subagentRouting: true
-    inheritRoute: true
-    resolveModelOnly: true
-    inheritReasoning: true
-
-- id: sandbox
-  name: '@deepseek-ai/dsh-sandbox-local'
-
-- id: sandbox-policy
-  name: '@deepseek-ai/dsh-sandbox-policy'
-  config:
-    mode: danger-full-access
-    workspaceRoot: !!js process.env.DSH_CWD ?? process.cwd()
-
-- id: subprocess
-  name: '@deepseek-ai/dsh-subprocess-local'
-
-- id: bash-local
-  name: '@deepseek-ai/dsh-bash-local'
-  config:
-    cwd: !!js process.env.DSH_CWD ?? process.cwd()
-    timeoutMs: 300000
-
-- id: fs-local
-  name: '@deepseek-ai/dsh-fs-local'
-  config:
-    cwd: !!js process.env.DSH_CWD ?? process.cwd()
-
-- id: agent-spine
-  name: '@deepseek-ai/dsh-agent-spine-demo'
-  config:
-    dshHome: !!js process.env.DSH_HOME ?? '/workspace/.deepsonar-home/.dsh'
-    includeHarnessIdentity: false
-    includeRuntimeContext: false
-    persona: !!js process.env.DSH_SYSTEM_PROMPT ?? ${JSON.stringify(DSH_PI_COMPAT_SYSTEM_PROMPT)}
-    tools:
-      mode: ${taskMode === "ptc" ? "code" : "native"}
-    workspaceContext: false
-    skills:
-      enabled: true
-    toolBash:
-      enableRunInBackground: true
-    toolJobs: false
-
-- id: str-replace-editor
-  name: '@deepseek-ai/dsh-tool-str-replace-editor'
-  config:
-    maxOutputChars: 16000
-
-- id: sessions
-  name: '@deepseek-ai/dsh-session-persistence-jsonl'
-  config:
-    root: !!js process.env.DSH_SESSION_ROOT ?? './.sessions'
-    compression: none
-
-- id: session-checkpoints
-  name: '@deepseek-ai/dsh-session-checkpoint-policy'
-
-- id: token-meter
-  name: '@deepseek-ai/dsh-token-meter'
-
-- id: compaction-basic
-  name: '@deepseek-ai/dsh-compaction-basic'
-  config:
-    thresholdRatio: 0.8
-    retainRatio: 0.16
-    maxTokens: 8192
-    compactionRetries: 1
-${codeRuntime}`;
-  await context.host.uploadFile(config, `${home}/deepsonar.cordis.yml`);
+  const profilePath = `${DSH_HOME}/profiles/${DSH_PROFILE}`;
+  await context.host.uploadFile(DSH_PROFILE_MANIFEST, `${profilePath}/package.json`);
+  await context.host.uploadFile(buildDshProfilePatch({
+    providerConfig: context.dshProvider.config,
+    taskMode: context.dshTaskMode,
+    cwd: context.cwd,
+  }), `${profilePath}/cordis.patch.yml`);
+  // Re-materialize every launch so an old home-level override cannot augment the
+  // frozen Job composition. The profile itself has no inherited bundles.
+  await context.host.uploadFile("[]\n", `${DSH_HOME}/cordis.patch.yml`);
+  await context.host.uploadFile("", `${DSH_HOME}/.env`);
 }
 
 function dshSessionId(state?: AdapterRuntimeState): string {
@@ -846,9 +773,12 @@ function dshToolInput(value: unknown): unknown {
 const DSH_SILENT_SESSION_EVENTS = new Set(["turn/start", "turn/end"]);
 
 function dshToolCallId(data: Record<string, unknown>): string {
-  for (const key of ["id", "callId", "callID", "toolCallId", "toolCallID", "call_id", "tool_call_id"]) {
+  for (const key of ["toolCallId", "callId", "callID", "toolCallID", "call_id", "tool_call_id", "id"]) {
     const value = data[key];
     if (typeof value === "string" && value) return value;
+  }
+  if (data.message && typeof data.message === "object" && !Array.isArray(data.message)) {
+    return dshToolCallId(data.message as Record<string, unknown>);
   }
   return "";
 }
@@ -886,8 +816,21 @@ function decodeDsh(line: Record<string, unknown>, state: AdapterRuntimeState): R
   const method = String(line.method ?? "");
   const params = line.params && typeof line.params === "object" && !Array.isArray(line.params) ? line.params as Record<string, unknown> : {};
   const sessionId = typeof params.sessionId === "string" ? params.sessionId : undefined;
-  if (sessionId && sessionId !== dshSessionId(state)) {
-    return [{ type: "result", subtype: "error", is_error: true, result: "DSH_JSONRPC_SESSION_MISMATCH" }];
+  if (method === "subagent.started") {
+    const parent = params.parentSessionId, child = params.childSessionId;
+    if (typeof child !== "string" || !child || (parent !== dshSessionId(state) && !state.dshChildSessionIds?.has(String(parent)))) {
+      return [{ type: "result", subtype: "error", is_error: true, result: "DSH_JSONRPC_SESSION_MISMATCH" }];
+    }
+    (state.dshChildSessionIds ??= new Set()).add(child);
+    return [];
+  }
+  if (method === "session.event" || method === "session.status") {
+    // The official server broadcasts child sessions too. Only a preceding
+    // authenticated lineage notification admits their non-authoritative stream.
+    if (sessionId && state.dshChildSessionIds?.has(sessionId)) return unknownRuntimeEvent();
+    if (!sessionId || sessionId !== dshSessionId(state)) {
+      return [{ type: "result", subtype: "error", is_error: true, result: "DSH_JSONRPC_SESSION_MISMATCH" }];
+    }
   }
   if (method === "session.event") {
     const event = params.event && typeof params.event === "object" && !Array.isArray(params.event) ? params.event as Record<string, unknown> : {};
@@ -899,7 +842,8 @@ function decodeDsh(line: Record<string, unknown>, state: AdapterRuntimeState): R
       return chunk.type ? unknownRuntimeEvent() : [];
     }
     if (event.type === "assistant/message" || event.type === "user/message") {
-      const message = data.message && typeof data.message === "object" && !Array.isArray(data.message) ? data.message as Record<string, unknown> : {};
+      const message = event.type === "user/message" ? data
+        : data.message && typeof data.message === "object" && !Array.isArray(data.message) ? data.message as Record<string, unknown> : {};
       const content = dshContentBlocks(message.content).map((block) => {
         if (block.type === "tool-call") return { type: "tool_use", id: block.id, name: block.name, input: dshToolInput(block.arguments) };
         if (block.type === "tool-result") return { type: "tool_result", tool_use_id: block.toolCallId, content: block.content, is_error: block.isError === true };
@@ -924,7 +868,8 @@ function decodeDsh(line: Record<string, unknown>, state: AdapterRuntimeState): R
       if (!id) return unknownRuntimeEvent();
       const isError = (data.error != null && !(typeof data.error === "string" && !data.error.trim()))
         || data.isError === true
-        || data.is_error === true;
+        || data.is_error === true
+        || (data.message && typeof data.message === "object" && (data.message as Record<string, unknown>).isError === true);
       return [{ type: "user", message: { content: [{ type: "tool_result", tool_use_id: id, is_error: isError, content: dshToolResultContent(data) }] } }];
     }
     if (event.type === "turn/end") {
@@ -945,7 +890,7 @@ function decodeDsh(line: Record<string, unknown>, state: AdapterRuntimeState): R
 
 const dsh = Object.freeze<RuntimeAdapter>({
   id: "dsh",
-  version: "0.1.1-rc.2",
+  version: DSH_VERSION,
   outputMode: "jsonl",
   capabilities: fixedCapabilities({
     streamEvents: true,
@@ -962,7 +907,10 @@ const dsh = Object.freeze<RuntimeAdapter>({
   start: (context) => sandboxDsh(context.host, context),
   materialize: materializeDsh,
   projectRuntime: buildDshPiAiRuntimeProjection,
-  resume: (context) => sandboxDsh(context.host, context),
+  persistentSessionResume: false,
+  resume: async () => {
+    throw new Error("CONTEXT_RESUME_UNSUPPORTED: DSH SDK JSON-RPC cannot reopen a persisted session after process exit; start a new Job explicitly.");
+  },
   encodeInput: (content, state) => {
     if (!state) throw new Error("DSH_RUNTIME_STATE_MISSING");
     state.dshInitialInput = content;

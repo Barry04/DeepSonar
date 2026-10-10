@@ -1005,6 +1005,7 @@ export function createEventIngestionSideEffectApplication(
         summary: normalized.summary ?? null,
         raw_json: {
           ...(normalized.raw ?? {}),
+          impact: normalized.impact ?? null,
           ...(normalized.quantities && normalized.quantities.length > 0 ? { quantities: normalized.quantities } : {}),
         } as never,
       })}

@@ -251,8 +251,8 @@ This Job uses a Scheduler-selected, trusted runtime image. Before testing, read 
 
 - Do **not** install or download JDK, Maven, Gradle, SDKMAN, or compiler toolchains in the sandbox. Do not use apt-get, curl/wget archives, ./mvnw, or equivalent bootstrap fallbacks for those tools.
 - Project dependencies may be fetched only when the frozen DEEPSONAR_ALLOW_EGRESS policy permits it; dependency downloads are not a substitute for the prebuilt toolchain.
-- If a required preinstalled command is missing, stop the dynamic attempt and submit emit_fact.verification with outcome=inconclusive, recording the missing commands. Never claim a confirmed Finding from a static description alone. Human authorization/credential blockers use request_human; needs_human is mark_job_done.verdict only, not emit_fact.verification.outcome.
-- Record the runtime image key/digest, tool versions, target revision, exact steps, expected result, actual result, and limitations in emit_fact.verification for runtime-test evidence.`;
+- If a required preinstalled command is missing, stop the dynamic attempt and record the missing commands using the role-scoped runtime evidence policy below. Never claim a confirmed Finding from a static description alone.
+- Record the runtime image key/digest, tool versions, target revision, exact steps, expected result, actual result, and limitations using the role-scoped runtime evidence policy below.`;
 
 /** #588: every official runtime image ships offline tool manuals. */
 export const RUNTIME_TOOL_MANUALS_POLICY = `### Runtime tool manuals (Scheduler policy)
@@ -263,7 +263,29 @@ This Job's runtime image includes offline tool manuals at \`/opt/deepsonar/manua
 - Manuals cover when to use / when not, prerequisites, invocation, output meaning, failure classes, composition, evidence retention, and version limits.
 - Do not rely on host-repo docs or guessed \`--help\` alone. Prefer manuals before first invocation of an unfamiliar tool.
 - The manual does not grant tools, network access, credentials, devices, Job operations, budget, or side-effect permissions; the frozen Job snapshot and Scheduler remain authoritative.
-- Empty results are not automatic \`needs_human\`; missing devices/services must use verification outcome=inconclusive without fabricating runtime output. Human authorization blockers use request_human; needs_human is mark_job_done.verdict only.`;
+- Empty results do not prove a Finding or an authorization blocker. Do not fabricate runtime output; use the role-scoped runtime evidence policy below for missing devices/services and human authorization blockers.`;
+
+export function runtimeEvidencePolicy(roleName: string): string {
+  const heading = "### Runtime evidence submission (Scheduler policy)";
+  if (roleName === "verify") return `${heading}
+
+- Verify consumes existing structured evidence; it does not create maker evidence. Missing tools, devices, services or insufficient evidence require mark_job_done with verdict=rework and a nonempty missing_evidence array naming the gaps.
+- A necessary human authorization, credential, business decision or high-risk blocker requires mark_job_done with verdict=needs_human and a summary of the required human action.
+- Record observations and limitations in the summary. Never invent a Finding ID or confirm from static narration alone.`;
+  if (roleName === "report") return `${heading}
+
+- Report only projects the frozen input. Record missing context and runtime limitations in mark_job_done.summary; do not execute new tests or change Finding states.`;
+  if (roleName === "hub_reason") return `${heading}
+
+- Hub records gaps in its decision and routes authorized evidence work through available Job operations; runtime manuals do not grant evidence-writing operations.`;
+  return `${heading}
+
+- Only a Job bound to a supplied target Finding may submit emit_fact.verification, using that exact finding_id and subject_revision. Missing tools/devices/services use outcome=inconclusive; never fabricate runtime output.
+- Without a target Finding, submit an ordinary emit_fact with title and description recording observations, missing tools and limitations; omit verification and never invent a finding_id.
+- For review/test evidence, record attempted negative controls or refutations explicitly in attempted_refutation; limitations are not attempted refutations.
+- Human authorization/credential blockers use request_human with reason and an explicit subject. Finding subjects require the supplied finding_id and subject_revision; otherwise use a platform_blocker subject.
+- needs_human is mark_job_done.verdict only for Verify, not emit_fact.verification.outcome. Ordinary workers finish with summary and no verdict.`;
+}
 
 export function withRuntimeTestToolchainPolicy(
   roleName: string,
@@ -289,6 +311,7 @@ ${text}` : RUNTIME_TOOL_MANUALS_POLICY;
   if (specialty) {
     text = appendPolicyBlock(text, specialty.marker, specialty.body);
   }
+  text = appendPolicyBlock(text, "### Runtime evidence submission (Scheduler policy)", runtimeEvidencePolicy(roleName));
   return text;
 }
 

@@ -1239,23 +1239,48 @@ test("runtime HOME preparation fails closed when the directory is not writable",
   );
 });
 
-test("DSH session discovery uses the deterministic exact session directory", async () => {
+test("DSH session discovery selects only the pinned RC v4 generation", async () => {
   let command = "";
-  const sourcePath = "/workspace/.deepsonar-home/.dsh/sessions/project/session-context-1/session.jsonl";
+  const v3Path = "/workspace/.deepsonar-home/.dsh/sessions/--workspace--/session-context-1/session.v3.jsonl";
+  const sourcePath = "/workspace/.deepsonar-home/.dsh/sessions/--workspace--/session-context-1/session.v4.jsonl";
   const bundle = await CLI_SESSION_ADAPTERS.dsh.exportSession({
     async run(value) {
       command = value;
-      return { exitCode: 0, stdout: `${sourcePath}\n`, stderr: "" };
+      return { exitCode: 0, stdout: `${v3Path}\n${sourcePath}\n`, stderr: "" };
     },
     async readText(value) {
-      return value === sourcePath ? '{"type":"session","id":"session-context-1"}\n' : null;
+      return value === sourcePath ? '{"type":"session","version":4,"id":"session-context-1"}\n' : null;
     },
   }, "session-context-1");
   assert.match(command, /\/workspace\/\.deepsonar-home\/\.dsh\/sessions/);
-  assert.match(command, /\/session-context-1\/session\.jsonl/);
+  assert.match(command, /session-context-1\/session\.v4\.jsonl/);
+  assert.doesNotMatch(command, /session-context-1\/session\.v\*\.jsonl/);
   assert.equal(bundle.cli, "dsh");
   assert.equal(bundle.artifacts[0]?.sourcePath, sourcePath);
   assert.equal(bundle.artifacts[0]?.kind, "main");
+});
+
+test("DSH live session discovery fails closed when only a historical generation exists", async () => {
+  const oldPath = "/workspace/.deepsonar-home/.dsh/sessions/--workspace--/session-context-1/session.v3.jsonl";
+  const bundle = await CLI_SESSION_ADAPTERS.dsh.exportSession({
+    async run() { return { exitCode: 0, stdout: `${oldPath}\n`, stderr: "" }; },
+    async readText() { return "{}\n"; },
+  }, "session-context-1");
+  assert.equal(bundle.artifacts.length, 0);
+  assert.match(bundle.captureError ?? "", /未找到/);
+});
+
+test("DSH session discovery rejects traversal and ambiguous current-generation paths", async () => {
+  const invalid = await CLI_SESSION_ADAPTERS.dsh.exportSession(mockedSessionDiscoveryRuntime({ exitCode: 0, stdout: "", stderr: "" }), "../session");
+  assert.match(invalid.captureError ?? "", /非法/);
+
+  const first = "/workspace/.deepsonar-home/.dsh/sessions/--one--/session-context-1/session.v4.jsonl";
+  const second = "/workspace/.deepsonar-home/.dsh/sessions/--two--/session-context-1/session.v4.jsonl";
+  const ambiguous = await CLI_SESSION_ADAPTERS.dsh.exportSession({
+    async run() { return { exitCode: 0, stdout: `${first}\n${second}\n`, stderr: "" }; },
+    async readText() { return "{}\n"; },
+  }, "session-context-1");
+  assert.match(ambiguous.captureError ?? "", /多个项目目录/);
 });
 
 function mockedSessionDiscoveryRuntime(

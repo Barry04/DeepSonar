@@ -121,6 +121,7 @@ export async function attachVerificationEvidence(
         runtime_digest: ver.runtime_digest ?? null,
         exit_code: typeof ver.exit_code === "number" ? ver.exit_code : null,
         limitations: ver.limitations ?? [],
+        attempted_refutation: ver.attempted_refutation ?? [],
         source_job_id: String(job.id),
         source_role: String(job.type),
       },

@@ -17,6 +17,7 @@ export type FactFirstRecord = {
   expected?: string | null;
   actual?: string | null;
   limitations?: unknown;
+  attempted_refutation?: readonly string[] | null;
 };
 
 export type FactFirstGateResult = {
@@ -131,8 +132,8 @@ export function evaluateFactFirstConfirmGate(
 
   const ignored = new Set(
     frozen
-      ? structured
-          .filter((fact) => textField(fact.subject_revision) !== frozen)
+      ? relevant
+          .filter((fact) => textField(fact.subject_revision).length > 0 && textField(fact.subject_revision) !== frozen)
           .map((fact) => fact.node_id)
       : [],
   );
@@ -154,6 +155,17 @@ export function evaluateFactFirstConfirmGate(
   const rejected = relevant.filter(
     (fact) => !ignored.has(fact.node_id) && REJECT_OUTCOMES.has(textField(fact.outcome)),
   );
+  const incompleteRefutations = rejected.filter(
+    (fact) => !isStructuredVerificationFact(fact) || textField(fact.job_status) !== "succeeded",
+  );
+  if (incompleteRefutations.length > 0) {
+    return fail(
+      "insufficient",
+      ["structured_refuting_fact"],
+      ["否定 Fact 必须有当前修订、expected/actual 与成功来源 Job，才能写入否定终态"],
+      incompleteRefutations.map((fact) => fact.node_id),
+    );
+  }
   const supporting = counted.filter(
     (fact) => textField(fact.outcome) === "supports" && !FAILED_JOB.has(textField(fact.job_status)),
   );

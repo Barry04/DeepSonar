@@ -110,7 +110,7 @@ export function assertVendorUpstreamStatus(status: number): void {
 const OPENSANDBOX_POC_CLI_PROBES: Record<(typeof OPENSANDBOX_POC_CLI_IDS)[number], string> = {
   claude: "command -v claude",
   pi: "command -v pi",
-  dsh: "test -f /usr/local/lib/node_modules/@deepseek-ai/dsh-sdk-jsonrpc-demo/lib/packaged-bin.js",
+  dsh: "test -f /opt/deepsonar/dsh/node_modules/@deepseek-ai/dsh/lib/bin.js",
 };
 
 export function shouldRunOpenSandboxPoc(env: NodeJS.ProcessEnv = process.env): boolean {

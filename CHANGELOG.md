@@ -6,10 +6,14 @@
 
 ### 变更
 
+- 治理 CLI 版本更新：Pi 1.1.0、Claude Code 2.1.296，并同步 npm 完整性校验、镜像清单和离线手册目录。DSH 继续使用已验证的 0.1.1-rc.2 完整依赖组合；上游较新的局部包未形成可替换的 JSON-RPC 发布组合。
 - Provider 账号 CLI 归属与并发文档收口（#707 Phase 3）：`ARCHITECTURE` 写明六档优先级链、CLI 排他 ⇒ 凭据级 `max_concurrent` 即 CLI 级并发、Provider 档先于 Credential；`DESIGN` 把账号 × CLI 1:1 与使用期四层同口径 fail-closed 写入内核凭据边界。不 bump schema：`credentials.agent_cli` 列保持可空（`git` / `oci_registry` 无 CLI 归属）；`llm_provider` 空值已由 Phase 1 API fail-closed，不做列级 `NOT NULL` / `SCHEMA_VERSION` 重建。
 
 ### 修复
 
+- Verify 自动确认、补证确认、显式提案与状态摘要统一消费完整确认门；安全 profile 的独立证据、impact 与结构化反证尝试贯通摄入、快照和校验。失败来源、修订不匹配和证据完整性不再被内部 Fact gate 绕过。
+- Pi 空闲催促与恢复输入使用可启动新回合的 RPC prompt，核验实际 session 身份并有界等待 ACK/启动；错误状态按回合隔离，终态错误不会被 settled 覆盖。新增真实 Pi 离线恢复冒烟。
+- Report 按 Finding ID 和冻结状态章节逐项核对覆盖，缺失时使用确定性完整模板；大报告不再要求模型在 summary 字节上限内枚举所有条目。动态工具示例、rework 缺项要求与角色/镜像策略同步机器契约。
 - 网络拓扑消除服务发现歧义（#685 方案 4）：bridge 部署下 Scheduler 只挂业务网 `deepsonar`，`opensandbox` 撤回 #687 的沙箱网双挂；受管 `deepsonar-gateway-proxy` 改经命名卷 `deepsonar-gateway-upstream` 上的 Unix socket 回连 Scheduler，不再解析 `scheduler` 服务名，Podman 多 aardvark nameserver / musl 并行查询不再能让 Gateway 或 OpenSandbox / PostgreSQL / Silo 间歇 `ENOTFOUND`。代理路径白名单（`/gateway`、`/control/v1`）、Job token 鉴权与拒绝管理 API / CONNECT 不变，且代理不在业务网上。host 部署保持经 `host.docker.internal`（`/etc/hosts`）回连。新增 compose 拓扑自检 `compose-network-topology.test.ts`；健康探测有界重试仅保留为瞬态保护。
 - Provider 账号 CLI 归属贯通到候选解析层（#707 Phase 1 / 方案 A）：`resolve-credential` 删除软回退与 `default_credential_id` 侧路；CLI 不匹配返回 `provider_credential_cli_mismatch`（`permanent_failure`）；协议不兼容返回 `provider_credential_protocol_incompatible`（`model_correctable`）。凭据 create/PATCH 拒绝空 `agent_cli`（`CREDENTIAL_CLI_REQUIRED`）；在跑 Job 持有账号时禁止改 `agent_cli`/`provider`（`CREDENTIAL_IN_USE_BY_RUNNING_JOBS`）。
 

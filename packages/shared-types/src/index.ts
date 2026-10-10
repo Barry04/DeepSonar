@@ -361,6 +361,7 @@ export const VerificationEvidence = z
   runtime_digest: z.string().max(128).regex(/\S/).optional(),
   /** Process exit code for runtime proof (#577). Text expected/actual alone is not reproduced proof. */
   exit_code: z.number().int().min(-2147483648).max(2147483647).optional(),
+  attempted_refutation: z.array(nonEmptyText(2000)).max(20).optional(),
   limitations: z.array(z.string().max(1000).regex(/\S/)).max(20).optional(),
   })
   .strict();
