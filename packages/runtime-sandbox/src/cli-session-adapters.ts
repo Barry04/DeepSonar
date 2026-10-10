@@ -128,12 +128,23 @@ const dshAdapter: AgentCliSessionAdapter = {
       return { cli: "dsh", sessionId, artifacts: [], captureError: "DSH session ID 非法，拒绝扫描" };
     }
     const root = "/workspace/.deepsonar-home/.dsh/sessions";
-    const command = `base=${sh(root)}; if [ -d "$base" ]; then find "$base" -type f -path ${sh(`*/${sessionId}/session.jsonl`)} -print 2>/dev/null; fi`;
+    // Live RC runtime discovery is intentionally pinned to the current v4
+    // generation. Historical v0-v3 files remain readable by the detached web
+    // archive viewer, but must never be resumed as a live Agent session.
+    const command =
+      `base=${sh(root)}; if [ -d "$base" ]; then find "$base" -type f ` +
+      `-path ${sh(`*/${sessionId}/session.v4.jsonl`)} -print 2>/dev/null; fi`;
     const result = await runtime.run(command);
     if (result.exitCode !== 0 && !result.stdout.trim()) {
       return { cli: "dsh", sessionId, artifacts: [], captureError: result.stderr.trim() || "DSH Session 扫描失败" };
     }
-    const paths = [...new Set(result.stdout.split("\n").map((value) => value.trim()).filter(Boolean))];
+    const paths = [...new Set(result.stdout.split("\n").map((value) => value.trim()).filter(Boolean))]
+      .filter((path) => {
+        if (!path.startsWith(`${root}/`)) return false;
+        const parts = path.slice(root.length + 1).split("/");
+        return parts.length === 3 && Boolean(parts[0]) && ![".", ".."].includes(parts[0]!)
+          && parts[1] === sessionId && parts[2] === "session.v4.jsonl";
+      });
     if (paths.length > 1) {
       return { cli: "dsh", sessionId, artifacts: [], captureError: `DSH session ${sessionId} 出现在多个项目目录，拒绝猜测` };
     }

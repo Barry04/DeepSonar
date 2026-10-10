@@ -52,19 +52,19 @@ const baseApt = [
   ["npx", "bundled with Node 22 base image", ["npx"], "Invoke a package binary only when it is already present in the frozen image.", "Do not let npx download from the network; use a declared image package.", "npx --no-install --help", ["--no-install", "--package"]],
   ["claude-code", "2.1.296", ["claude"], "Run the declared Claude Code Agent runtime within the Scheduler-controlled job.", "Use the CLI selected in the job snapshot; the CLI is an Agent runtime, not an audit result generator.", "claude --version", ["--version", "working directory", "job runtime options"]],
   ["pi-coding-agent", "1.1.0", ["pi"], "Run the declared Pi Agent runtime for an image-compatible job.", "Use Pi when the frozen snapshot selects it; its web extension is available only in the audit variant.", "pi --version", ["--version", "working directory", "session options"]],
-  ["dsh-sdk-jsonrpc-demo", "0.1.1-rc.2", ["dsh"], "Run the DSH Agent runtime and its governed JSON-RPC control surface.", "Use DSH only through the Scheduler-provided job token and control API; ordinary text or shell output is not a control event.", "dsh --help", ["--help", "workspace", "session"]],
+  ["dsh", "0.2.0-rc.2", ["dsh"], "Run the official DSH Agent runtime and its governed control surface.", "Use DSH only through the Scheduler-provided job token and control API; ordinary text or shell output is not a control event.", "dsh --help", ["--help", "workspace", "session"]],
   ["ca-certificates", "20230311+deb12u1", [], "Provide TLS trust for permitted HTTPS operations.", "This is a runtime dependency; it is not a substitute for the Scheduler network policy.", "not directly callable", [], true],
-  ["dsh-runtime-modules", "0.1.1-rc.2 (plus dsh-reasoning-settings 0.3.0)", [], "Support the DSH CLI's protocol, skill, sandbox, subprocess, filesystem, session, token, code-runtime, and compaction modules.", "These packages are implementation dependencies; Agents use the dsh entrypoint and governed operations.", "not directly callable", [], true]
+  ["dsh-runtime-modules", "0.2.0-rc.2", [], "Support the DSH CLI's protocol, skill, sandbox, subprocess, filesystem, session, PTC, and compaction modules.", "These packages are implementation dependencies; Agents use the dsh entrypoint and governed operations.", "not directly callable", [], true]
 ];
 
 const baseSourcePointers = {
   git: "apt.git", python3: "apt.python3", curl: "apt.curl", ripgrep: "apt.ripgrep", jq: "apt.jq", file: "apt.file", unzip: "apt.unzip", "xz-utils": "apt.xz-utils",
-  node: "baseImage", npm: "baseImage", npx: "baseImage", "claude-code": "npm.@anthropic-ai/claude-code", "pi-coding-agent": "npm.@earendil-works/pi-coding-agent", "dsh-sdk-jsonrpc-demo": "npm.@deepseek-ai/dsh-sdk-jsonrpc-demo"
+  node: "baseImage", npm: "baseImage", npx: "baseImage", "claude-code": "npm.@anthropic-ai/claude-code", "pi-coding-agent": "npm.@earendil-works/pi-coding-agent", dsh: "npm.@deepseek-ai/dsh"
 };
 const baseManifestCovers = {
   "claude-code": ["@anthropic-ai/claude-code"],
   "pi-coding-agent": ["@earendil-works/pi-coding-agent"],
-  "dsh-sdk-jsonrpc-demo": ["@deepseek-ai/dsh-sdk-jsonrpc-demo"]
+  dsh: ["@deepseek-ai/dsh"]
 };
 const makeBase = (imageKey, source = "agent-harness/runtime-images.json") => baseApt.map(([id, version, commands, scenario, selection, invocation, params, implementationOnly]) => entry(imageKey, {
   id,
@@ -85,7 +85,7 @@ const makeBase = (imageKey, source = "agent-harness/runtime-images.json") => bas
 }));
 
 const dshModules = [
-  "@deepseek-ai/dsh-sdk-jsonrpc-server", "@deepseek-ai/dsh-sdk-protocol", "@deepseek-ai/dsh-agent-spine-demo", "@deepseek-ai/dsh-skill", "@deepseek-ai/dsh-skill-filesystem", "@deepseek-ai/dsh-tool-skill", "@deepseek-ai/dsh-llm-pi-ai", "dsh-reasoning-settings", "@deepseek-ai/dsh-sandbox-local", "@deepseek-ai/dsh-sandbox-policy", "@deepseek-ai/dsh-subprocess-local", "@deepseek-ai/dsh-bash-local", "@deepseek-ai/dsh-fs-local", "@deepseek-ai/dsh-tool-bash", "@deepseek-ai/dsh-tool-str-replace-editor", "@deepseek-ai/dsh-session-persistence-jsonl", "@deepseek-ai/dsh-session-checkpoint-policy", "@deepseek-ai/dsh-token-meter", "@deepseek-ai/dsh-code-runtime", "@deepseek-ai/dsh-code-runtime-worker-thread", "@deepseek-ai/dsh-compaction-basic"
+  "@deepseek-ai/dsh-sdk-jsonrpc-server", "@deepseek-ai/dsh-sdk-protocol", "@deepseek-ai/dsh-sdk-app", "@deepseek-ai/dsh-llm", "@deepseek-ai/dsh-session", "@deepseek-ai/dsh-agent", "@deepseek-ai/dsh-llm-retry", "@deepseek-ai/dsh-mcp-resources", "@deepseek-ai/dsh-system-prompt", "@deepseek-ai/dsh-tools", "@deepseek-ai/dsh-agent-loop", "@deepseek-ai/dsh-skill", "@deepseek-ai/dsh-skill-filesystem", "@deepseek-ai/dsh-tool-skill", "@deepseek-ai/dsh-llm-pi-ai", "@deepseek-ai/dsh-sandbox-local", "@deepseek-ai/dsh-sandbox-policy", "@deepseek-ai/dsh-subprocess-local", "@deepseek-ai/dsh-shell-env", "@deepseek-ai/dsh-bash-local", "@deepseek-ai/dsh-fs-local", "@deepseek-ai/dsh-fs-observation-policy", "@deepseek-ai/dsh-tool-fs", "@deepseek-ai/dsh-tool-fs-search", "@deepseek-ai/dsh-jobs-local", "@deepseek-ai/dsh-invariants", "@deepseek-ai/dsh-scope", "@deepseek-ai/dsh-tool-bash", "@deepseek-ai/dsh-tool-str-replace-editor", "@deepseek-ai/dsh-session-persistence-jsonl", "@deepseek-ai/dsh-session-projection", "@deepseek-ai/dsh-session-checkpoint-policy", "@deepseek-ai/dsh-token-meter", "@deepseek-ai/dsh-subagent", "@deepseek-ai/dsh-subagent-spawn-in-process", "@deepseek-ai/dsh-subagent-fork-in-process", "@deepseek-ai/dsh-tool-subagent", "@deepseek-ai/dsh-tool-subagent-control", "@deepseek-ai/dsh-ptc-runtime", "@deepseek-ai/dsh-ptc-runtime-node", "@deepseek-ai/dsh-workflow-ptc", "@deepseek-ai/dsh-compaction-basic"
 ];
 
 const addDshModules = (imageKey, source = "agent-harness/runtime-images.json") => dshModules.map((id) => entry(imageKey, {
@@ -93,7 +93,7 @@ const addDshModules = (imageKey, source = "agent-harness/runtime-images.json") =
   kind: "implementation_dependency",
   implementation_only: true,
   agent_visible: false,
-  version: id === "dsh-reasoning-settings" ? "0.3.0" : "0.1.1-rc.2",
+  version: "0.2.0-rc.2",
   version_source: `${source}#npm.${id}`,
   commands: [],
   usage_scenario: "Internal dependency loaded by the dsh Agent runtime.",
@@ -178,8 +178,8 @@ const commonBase = (imageKey) => [...makeBase(imageKey), ...addDshModules(imageK
 const baseSource = "agent-harness/runtime-images.json";
 
 const images = [];
-images.push(makeImage("deepsonar-base", ["agent-harness/runtime-images.json", "deploy/Dockerfile.agent", "agent-harness/write-tool-manifest.mjs"], [], commonBase("deepsonar-base"), ["base utilities", "Agent CLIs", "DSH implementation dependencies"]));
-images.push(makeImage("deepsonar-audit", ["agent-harness/runtime-images.json", "deploy/Dockerfile.agent", "deploy/pi-web-access"], [], [...commonBase("deepsonar-audit"), ...auditBase("deepsonar-audit")], ["base utilities", "Agent CLIs", "binary inspection", "Pi web access"]));
+images.push(makeImage("deepsonar-base", ["agent-harness/runtime-images.json", "agent-harness/dsh-runtime/package.json", "agent-harness/dsh-runtime/package-lock.json", "deploy/Dockerfile.agent", "agent-harness/write-tool-manifest.mjs"], [], commonBase("deepsonar-base"), ["base utilities", "Agent CLIs", "DSH implementation dependencies"]));
+images.push(makeImage("deepsonar-audit", ["agent-harness/runtime-images.json", "agent-harness/dsh-runtime/package.json", "agent-harness/dsh-runtime/package-lock.json", "deploy/Dockerfile.agent", "deploy/pi-web-access"], [], [...commonBase("deepsonar-audit"), ...auditBase("deepsonar-audit")], ["base utilities", "Agent CLIs", "binary inspection", "Pi web access"]));
 
 const kaliCommon = [
   ["ca-certificates", "dpkg", [], "Provide TLS trust for permitted HTTPS operations.", "Runtime dependency; network permission remains Scheduler-controlled.", "not directly callable", [], true],
@@ -204,7 +204,7 @@ const kaliExtras = [
   def("deepsonar-kali-minimal", "npm", "22.23.2 bundled npm", "agent-harness/kali-minimal-runtime.json#/downloads.node", ["npm", "npx"], "Inspect or run already-installed JavaScript packages.", "Use only frozen package contents; npx must not fetch.", "npm --version", ["--version", "exec", "--no-install"]),
   def("deepsonar-kali-minimal", "claude-code", "2.1.296", "agent-harness/kali-minimal-runtime.json#/npm.@anthropic-ai/claude-code", ["claude"], "Run the declared Claude Code Agent runtime.", "Use the CLI selected in the frozen job snapshot.", "claude --version", ["--version"], { covers: ["@anthropic-ai/claude-code"] }),
   def("deepsonar-kali-minimal", "pi-coding-agent", "1.1.0", "agent-harness/kali-minimal-runtime.json#/npm.@earendil-works/pi-coding-agent", ["pi"], "Run the declared Pi Agent runtime.", "Use the CLI selected in the frozen job snapshot.", "pi --version", ["--version"], { covers: ["@earendil-works/pi-coding-agent"] }),
-  def("deepsonar-kali-minimal", "dsh-sdk-jsonrpc-demo", "0.1.1-rc.2", "agent-harness/kali-minimal-runtime.json#/npm.@deepseek-ai/dsh-sdk-jsonrpc-demo", ["dsh"], "Run the governed DSH Agent runtime.", "Use only Scheduler-issued control credentials and operations.", "dsh --help", ["--help"], { covers: ["@deepseek-ai/dsh-sdk-jsonrpc-demo"] }),
+  def("deepsonar-kali-minimal", "dsh", "0.2.0-rc.2", "agent-harness/kali-minimal-runtime.json#/npm.@deepseek-ai/dsh", ["dsh"], "Run the governed DSH Agent runtime.", "Use only Scheduler-issued control credentials and operations.", "dsh --help", ["--help"], { covers: ["@deepseek-ai/dsh"] }),
   def("deepsonar-kali-minimal", "uv", "0.11.32", "agent-harness/kali-minimal-runtime.json#/downloads.uv", ["uv"], "Select a declared Python version or resolve packages from an already-authorized source.", "Use uv for managed Python versions and offline or lockfile-bound environments; do not bootstrap arbitrary packages.", "uv --version", ["python", "venv", "pip", "--offline"]),
   ...["3.10.20", "3.11.15", "3.12.13", "3.13.14", "3.14.6"].map((v) => def("deepsonar-kali-minimal", `python${v.split(".").slice(0, 2).join(".")}`, v, "agent-harness/kali-minimal-runtime.json#/managed.python.versions", [`python${v.split(".").slice(0, 2).join(".")}`], "Run a project or sample with the matching declared Python minor version.", "Select the version required by the project; default python3 is the image default 3.14.6.", `python${v.split(".").slice(0, 2).join(".")} --version`, ["--version", "-m", "-c"], v === "3.14.6" ? { covers: ["python"] } : {})),
   def("deepsonar-kali-minimal", "jdk-8", "8u492-b09", "agent-harness/kali-minimal-runtime.json#/managed.jdk.versions[0]", ["java8", "javac8"], "Build or run projects constrained to Java 8.", "Use the project-required major; do not use Java 8 to explain Java 17 behavior.", "java8 -version", ["-version", "-cp", "-jar"]),
@@ -214,7 +214,7 @@ const kaliExtras = [
   def("deepsonar-kali-minimal", "pi-web-access", "0.29.0", "agent-harness/kali-minimal-runtime.json#/piExtensions.pi-web-access", ["pi"], "Use Pi's declared web search, content extraction, or URL fetch capability when the job permits egress.", "Use only for task-required current external material; preserve URL and retrieval provenance.", "pi --help", ["query", "URL", "result limit"], { kind: "capability", requires_egress: true, covers: ["pi-web-access"], failure_handling: { missing_condition: "If egress is disallowed, record missing network condition and continue with local evidence when possible." } }),
   ...addDshModules("deepsonar-kali-minimal", "agent-harness/kali-minimal-runtime.json")
 ];
-images.push(makeImage("deepsonar-kali-minimal", ["agent-harness/kali-minimal-runtime.json", "deploy/Dockerfile.agent-kali-minimal"], [], [...makeKaliCommon(), ...kaliExtras], ["common utilities", "multi-version Python", "Go/Rust", "Java 8/11/17", "Maven", "Agent CLIs"]));
+images.push(makeImage("deepsonar-kali-minimal", ["agent-harness/kali-minimal-runtime.json", "agent-harness/dsh-runtime/package.json", "agent-harness/dsh-runtime/package-lock.json", "deploy/Dockerfile.agent-kali-minimal"], [], [...makeKaliCommon(), ...kaliExtras], ["common utilities", "multi-version Python", "Go/Rust", "Java 8/11/17", "Maven", "Agent CLIs"]));
 
 const chromeTestDefs = (imageKey) => [
   def(imageKey, "chromium", "151.0.7922.71-1~deb12u1", "agent-harness/chrome-test-runtime.json#/apt.chromium", ["chromium"], "Launch a browser to observe page behavior, DOM, navigation, and browser artifacts.", "Use Chromium/CDP for real browser behavior; use Playwright for structured interaction after CDP connects.", "chromium --version", ["--headless=new", "--remote-debugging-port", "--user-data-dir", "--no-sandbox"]),

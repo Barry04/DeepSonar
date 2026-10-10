@@ -13,65 +13,7 @@ const dockerfile = readFileSync(new URL("../deploy/Dockerfile.agent", import.met
 const localDefinition = readFileSync(new URL("./image.mjs", import.meta.url), "utf8");
 const kaliConfig = JSON.parse(readFileSync(new URL("./kali-minimal-runtime.json", import.meta.url), "utf8"));
 const kaliDockerfile = readFileSync(new URL("../deploy/Dockerfile.agent-kali-minimal", import.meta.url), "utf8");
-const dshForbidden = [
-  "dsh-cc-tui",
-  '"@deepseek-ai/dsh"',
-  "@deepseek-ai/dsh-app-tui",
-  "@deepseek-ai/dsh-app-web",
-  "@deepseek-ai/dsh-client-ui-",
-  "@deepseek-ai/dsh-client-web",
-  "@deepseek-ai/dsh-web-",
-  "@deepseek-ai/dsh-tool-ask-user",
-];
-for (const forbidden of dshForbidden) {
-  if (JSON.stringify(config).includes(forbidden) || JSON.stringify(kaliConfig).includes(forbidden) || dockerfile.includes(forbidden) || kaliDockerfile.includes(forbidden)) {
-    throw new Error(`DSH machine runtime must not install UI package ${forbidden}`);
-  }
-}
-for (const packageName of [
-  "@deepseek-ai/dsh-sdk-jsonrpc-demo",
-  "@deepseek-ai/dsh-sdk-jsonrpc-server",
-  "@deepseek-ai/dsh-sdk-protocol",
-  "@deepseek-ai/dsh-agent-spine-demo",
-  "@deepseek-ai/dsh-skill",
-  "@deepseek-ai/dsh-skill-filesystem",
-  "@deepseek-ai/dsh-tool-skill",
-  "@deepseek-ai/dsh-llm-pi-ai",
-  "@deepseek-ai/dsh-sandbox-local",
-  "@deepseek-ai/dsh-sandbox-policy",
-  "@deepseek-ai/dsh-subprocess-local",
-  "@deepseek-ai/dsh-bash-local",
-  "@deepseek-ai/dsh-fs-local",
-  "@deepseek-ai/dsh-tool-bash",
-  "@deepseek-ai/dsh-tool-str-replace-editor",
-  "@deepseek-ai/dsh-session-persistence-jsonl",
-  "@deepseek-ai/dsh-session-checkpoint-policy",
-  "@deepseek-ai/dsh-token-meter",
-  "@deepseek-ai/dsh-code-runtime",
-  "@deepseek-ai/dsh-code-runtime-worker-thread",
-  "@deepseek-ai/dsh-compaction-basic",
-]) {
-  if (config.npm[packageName]?.version !== "0.1.1-rc.2" || kaliConfig.npm[packageName]?.version !== "0.1.1-rc.2") {
-    throw new Error(`${packageName} must be pinned to 0.1.1-rc.2 in base and Kali manifests`);
-  }
-  if (!config.npm[packageName]?.integrity || !kaliConfig.npm[packageName]?.integrity) {
-    throw new Error(`${packageName} must carry npm integrity in base and Kali manifests`);
-  }
-}
-for (const [packageName, integrityArg] of [
-  ["@deepseek-ai/dsh-subprocess-local", "DSH_SUBPROCESS_LOCAL_INTEGRITY"],
-  ["@deepseek-ai/dsh-code-runtime", "DSH_CODE_RUNTIME_INTEGRITY"],
-  ["@deepseek-ai/dsh-code-runtime-worker-thread", "DSH_CODE_RUNTIME_WORKER_INTEGRITY"],
-]) {
-  const baseEntry = config.npm[packageName];
-  const kaliEntry = kaliConfig.npm[packageName];
-  if (baseEntry?.license !== "MIT" || kaliEntry?.license !== "MIT") {
-    throw new Error(`${packageName} must declare the published MIT license`);
-  }
-  if (!dockerfile.includes(`ARG ${integrityArg}=${baseEntry.integrity}`) || !kaliDockerfile.includes(`ARG ${integrityArg}=${kaliEntry.integrity}`)) {
-    throw new Error(`${packageName} Docker integrity args must match the governed manifests`);
-  }
-}
+await import("./check-dsh-runtime.mjs");
 const openHarmonyDockerfile = readFileSync(new URL("../deploy/Dockerfile.agent-openharmony", import.meta.url), "utf8");
 const openHarmonyAuditDockerfile = readFileSync(new URL("../deploy/Dockerfile.agent-openharmony-audit", import.meta.url), "utf8");
 const openHarmonyFuzzDockerfile = readFileSync(new URL("../deploy/Dockerfile.agent-openharmony-fuzz", import.meta.url), "utf8");
@@ -208,21 +150,6 @@ const expectDockerfileParse = (source, label) => {
     }
   }
 };
-const reasoningPlugin = "dsh-reasoning-settings";
-const reasoningPluginVersion = "0.3.0";
-const reasoningPluginCommit = "5768999dbbbb5088fd27f89c85970fe2f7b2c5c6";
-const reasoningPluginSha256 = "e583207774b2875c4f5914540a8df699b4f0f947b3e3a28722504237ba3dc6e3";
-for (const [manifest, source, label] of [[config, dockerfile, "base"], [kaliConfig, kaliDockerfile, "Kali"]]) {
-  const entry = manifest.npm[reasoningPlugin];
-  expect(entry?.version === reasoningPluginVersion, `${label} reasoning plugin version drift`);
-  expect(entry?.commit === reasoningPluginCommit, `${label} reasoning plugin commit drift`);
-  expect(entry?.sha256 === reasoningPluginSha256, `${label} reasoning plugin SHA-256 drift`);
-  expect(entry?.license === "MIT", `${label} reasoning plugin license drift`);
-  expect(source.includes(`ARG DSH_REASONING_SETTINGS_VERSION=${reasoningPluginVersion}`), `${label} reasoning plugin version ARG missing`);
-  expect(source.includes(`ARG DSH_REASONING_SETTINGS_COMMIT=${reasoningPluginCommit}`), `${label} reasoning plugin commit ARG missing`);
-  expect(source.includes(`ARG DSH_REASONING_SETTINGS_SHA256=${reasoningPluginSha256}`), `${label} reasoning plugin SHA-256 ARG missing`);
-  expect(source.includes("codeload.github.com/JuneLearn/dsh-reasoning-settings/tar.gz/${DSH_REASONING_SETTINGS_COMMIT}"), `${label} reasoning plugin must install the pinned archive`);
-}
 expect(FINGERPRINT_SCHEMA_VERSION === "v2", "fingerprint schema version must be bumped deliberately when semantics change");
 expect(COMMON_FINGERPRINT_PATHS.length === 1 && COMMON_FINGERPRINT_PATHS[0] === ".dockerignore", "all image fingerprints must include the shared .dockerignore input");
 expect(dockerIgnore.trim().length > 0, ".dockerignore must remain present for image-context fingerprinting");

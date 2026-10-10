@@ -28,6 +28,8 @@ export const PRESETS = {
     dockerfile: "deploy/Dockerfile.agent",
     paths: [
       "agent-harness/runtime-images.json",
+      "agent-harness/dsh-runtime/package.json",
+      "agent-harness/dsh-runtime/package-lock.json",
       "agent-harness/write-tool-manifest.mjs",
       "agent-harness/runtime-manuals",
       "agent-harness/materialize-runtime-manuals.mjs",
@@ -39,6 +41,8 @@ export const PRESETS = {
     dockerfile: "deploy/Dockerfile.agent",
     paths: [
       "agent-harness/runtime-images.json",
+      "agent-harness/dsh-runtime/package.json",
+      "agent-harness/dsh-runtime/package-lock.json",
       "agent-harness/write-tool-manifest.mjs",
       "agent-harness/runtime-manuals",
       "agent-harness/materialize-runtime-manuals.mjs",
@@ -50,6 +54,8 @@ export const PRESETS = {
     dockerfile: "deploy/Dockerfile.agent-kali-minimal",
     paths: [
       "agent-harness/kali-minimal-runtime.json",
+      "agent-harness/dsh-runtime/package.json",
+      "agent-harness/dsh-runtime/package-lock.json",
       "agent-harness/write-tool-manifest.mjs",
       "agent-harness/runtime-manuals",
       "agent-harness/materialize-runtime-manuals.mjs",

@@ -21,20 +21,8 @@ ARG CLAUDE_CODE_VERSION=2.1.296
 ARG CLAUDE_CODE_INTEGRITY=sha512-OX/k/rpcthMqnFKOWcpNcbiLsMKtAjLOpQNJHlYiDCFUznWCIwdRTyl/p9SdHVrsrzZuPMCNqZjnpakIni6upw==
 ARG PI_CODING_AGENT_VERSION=1.1.0
 ARG PI_CODING_AGENT_INTEGRITY=sha512-SeEi/4hdcHNgA9UWlefZl7ZZpm3dzi2OoxNjDHsBJ9o298LNOtbL4DGKgitlEj6uCTccvtw6f2hlCkTPVJ2RXg==
-ARG DSH_VERSION=0.1.1-rc.2
-ARG DSH_JSONRPC_DEMO_INTEGRITY=sha512-bWqESVxm12UA1uwpqhrlepX71PGO5f5q5PZdMy7LBY6ec+KPvNHgEWYZsL5BIPrhXWfI0pxniFNHogb2o6i0vw==
-ARG DSH_JSONRPC_SERVER_INTEGRITY=sha512-wL9dt4AAKQ8oj3LFMXvxa3wpze1NsPquRb8mMakHocb7nizuLKj0ZcuDP+WqgqJ9seJ/qFRlbYMi2rC6ay0ULA==
-ARG DSH_PROTOCOL_INTEGRITY=sha512-DmAl4+km++LTOEpVMOQVZhMN2mrqb9ZMyLhzDEWFOp536AtISCfl8lRI1ixKr273ylgL8gwafx3wXgZ5/cV2qw==
-ARG DSH_AGENT_SPINE_INTEGRITY=sha512-y623EuADgQseN90NnX21N2uXefxQ3SQMTYsypkatTgHqqq9Rp2UGyYDsb71kh+CCrpVZp3M3CaGpbHv/VX2sCw==
-ARG DSH_SKILL_INTEGRITY=sha512-FACjlOqdsWX+0RtSs3RWrdY0QQEpPJrBfvxUbWSh7E8UyCM8dKdIbsQnuXIjsAgC7GgYp7lyFDSCMovQ3ARp8g==
-ARG DSH_SKILL_FILESYSTEM_INTEGRITY=sha512-eyQGv4046c392kIvOCom+gvJpiFbkWsf/VqB7dCQXTZrdXEx99P8oOm3jsagnllcLKYyZVVETs75pPgznye/iw==
-ARG DSH_TOOL_SKILL_INTEGRITY=sha512-ADOjLELlf6QgrJDFdieNDN42pInPHL39ZU/+v+MXxkhE6poM+kcZmn/eCxbfSvMBFQm9E58Zvg60c0hrsi5BCg==
-ARG DSH_SUBPROCESS_LOCAL_INTEGRITY=sha512-I4pyzpohZEVRQQbuEpMP0t8oKsf+XIlRo64aJVKGXI2eMcg9f9gbfhKQNYNqRGbegQL1HYpSLU6Rzyibldgwaw==
-ARG DSH_CODE_RUNTIME_INTEGRITY=sha512-SgFresqH5UABzRQZ7tOfqzOLMHF7089VeH+mfcwNQH5peOavgEKrAGOYz/9RnISH0XmMrj/x177t8gfO8Uvo/w==
-ARG DSH_CODE_RUNTIME_WORKER_INTEGRITY=sha512-wE+6x4yGsyg4kntVQFOcb5PiAg2Wb3gs1UNY7SHWC7WOcWCAbREZRfqaoAAxO7AZuqlFhBou7wWc6dZqtGENkw==
-ARG DSH_REASONING_SETTINGS_VERSION=0.3.0
-ARG DSH_REASONING_SETTINGS_COMMIT=5768999dbbbb5088fd27f89c85970fe2f7b2c5c6
-ARG DSH_REASONING_SETTINGS_SHA256=e583207774b2875c4f5914540a8df699b4f0f947b3e3a28722504237ba3dc6e3
+ARG DSH_VERSION=0.2.0-rc.2
+ARG DSH_INTEGRITY=sha512-EAJ3gPNcVt/uv8X19PMm9NkVhWgT7xXNMk0UKCVm+IQ5rpSQOcsMUa0HWlnYYVybKMsccjcRB21vVVsaXQ6IdA==
 ARG PI_WEB_ACCESS_VERSION=0.29.0
 ARG PI_WEB_ACCESS_INTEGRITY=sha512-1l4sAWYkFhiBynJf/mXuxmCHxjhiAyWJ4rfQVFu8UPa0JQhCS9oXAmNXcL0Q1SfrO00plmb6L4IkypJ3n1Q4Kg==
 ARG NODE_VERSION=22.23.2
@@ -76,50 +64,22 @@ RUN set -eu; arch="$(dpkg --print-architecture)"; \
     tar -xJf "$node_archive" -C /usr/local --strip-components=1; \
     rm "$node_archive"
 
+COPY agent-harness/dsh-runtime/package.json /opt/deepsonar/dsh/package.json
+COPY agent-harness/dsh-runtime/package-lock.json /opt/deepsonar/dsh/package-lock.json
+
 RUN set -eu; \
   test "$(npm view @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} dist.integrity)" = "$CLAUDE_CODE_INTEGRITY"; \
   test "$(npm view @earendil-works/pi-coding-agent@${PI_CODING_AGENT_VERSION} dist.integrity)" = "$PI_CODING_AGENT_INTEGRITY"; \
-  test "$(npm view @deepseek-ai/dsh-sdk-jsonrpc-demo@${DSH_VERSION} dist.integrity)" = "$DSH_JSONRPC_DEMO_INTEGRITY"; \
-  test "$(npm view @deepseek-ai/dsh-sdk-jsonrpc-server@${DSH_VERSION} dist.integrity)" = "$DSH_JSONRPC_SERVER_INTEGRITY"; \
-  test "$(npm view @deepseek-ai/dsh-sdk-protocol@${DSH_VERSION} dist.integrity)" = "$DSH_PROTOCOL_INTEGRITY"; \
-  test "$(npm view @deepseek-ai/dsh-agent-spine-demo@${DSH_VERSION} dist.integrity)" = "$DSH_AGENT_SPINE_INTEGRITY"; \
-  test "$(npm view @deepseek-ai/dsh-skill@${DSH_VERSION} dist.integrity)" = "$DSH_SKILL_INTEGRITY"; \
-  test "$(npm view @deepseek-ai/dsh-skill-filesystem@${DSH_VERSION} dist.integrity)" = "$DSH_SKILL_FILESYSTEM_INTEGRITY"; \
-  test "$(npm view @deepseek-ai/dsh-tool-skill@${DSH_VERSION} dist.integrity)" = "$DSH_TOOL_SKILL_INTEGRITY"; \
-  test "$(npm view @deepseek-ai/dsh-subprocess-local@${DSH_VERSION} dist.integrity)" = "$DSH_SUBPROCESS_LOCAL_INTEGRITY"; \
-  test "$(npm view @deepseek-ai/dsh-code-runtime@${DSH_VERSION} dist.integrity)" = "$DSH_CODE_RUNTIME_INTEGRITY"; \
-  test "$(npm view @deepseek-ai/dsh-code-runtime-worker-thread@${DSH_VERSION} dist.integrity)" = "$DSH_CODE_RUNTIME_WORKER_INTEGRITY"; \
-  reasoning_archive="/tmp/dsh-reasoning-settings-${DSH_REASONING_SETTINGS_COMMIT}.tar.gz"; \
-  curl -fsSL --retry 5 --retry-all-errors --connect-timeout 20 "https://codeload.github.com/JuneLearn/dsh-reasoning-settings/tar.gz/${DSH_REASONING_SETTINGS_COMMIT}" -o "$reasoning_archive"; \
-  echo "$DSH_REASONING_SETTINGS_SHA256  $reasoning_archive" | sha256sum -c -; \
+  test "$(node -e 'const p=require("/opt/deepsonar/dsh/package-lock.json").packages["node_modules/@deepseek-ai/dsh"]; process.stdout.write(p?.version ?? "")')" = "$DSH_VERSION"; \
+  test "$(node -e 'const p=require("/opt/deepsonar/dsh/package-lock.json").packages["node_modules/@deepseek-ai/dsh"]; process.stdout.write(p?.integrity ?? "")')" = "$DSH_INTEGRITY"; \
+  cd /opt/deepsonar/dsh; \
+  npm ci --omit=dev --ignore-scripts --no-audit --no-fund; \
   npm install -g --omit=dev --no-audit --no-fund \
-  @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
-  @earendil-works/pi-coding-agent@${PI_CODING_AGENT_VERSION} \
-  @deepseek-ai/dsh-sdk-jsonrpc-demo@${DSH_VERSION} \
-  @deepseek-ai/dsh-sdk-jsonrpc-server@${DSH_VERSION} \
-  @deepseek-ai/dsh-sdk-protocol@${DSH_VERSION} \
-  @deepseek-ai/dsh-agent-spine-demo@${DSH_VERSION} \
-  @deepseek-ai/dsh-skill@${DSH_VERSION} \
-  @deepseek-ai/dsh-skill-filesystem@${DSH_VERSION} \
-  @deepseek-ai/dsh-tool-skill@${DSH_VERSION} \
-  @deepseek-ai/dsh-llm-pi-ai@${DSH_VERSION} \
-  @deepseek-ai/dsh-sandbox-local@${DSH_VERSION} \
-  @deepseek-ai/dsh-sandbox-policy@${DSH_VERSION} \
-  @deepseek-ai/dsh-subprocess-local@${DSH_VERSION} \
-  @deepseek-ai/dsh-bash-local@${DSH_VERSION} \
-  @deepseek-ai/dsh-fs-local@${DSH_VERSION} \
-  @deepseek-ai/dsh-tool-bash@${DSH_VERSION} \
-  @deepseek-ai/dsh-tool-str-replace-editor@${DSH_VERSION} \
-  @deepseek-ai/dsh-session-persistence-jsonl@${DSH_VERSION} \
-  @deepseek-ai/dsh-session-checkpoint-policy@${DSH_VERSION} \
-  @deepseek-ai/dsh-token-meter@${DSH_VERSION} \
-  @deepseek-ai/dsh-code-runtime@${DSH_VERSION} \
-  @deepseek-ai/dsh-code-runtime-worker-thread@${DSH_VERSION} \
-  @deepseek-ai/dsh-compaction-basic@${DSH_VERSION} \
-  "$reasoning_archive" \
-  && npm list -g --depth=0 "dsh-reasoning-settings@${DSH_REASONING_SETTINGS_VERSION}" >/dev/null \
-  && rm -f "$reasoning_archive" \
-  && npm cache clean --force
+    @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
+    @earendil-works/pi-coding-agent@${PI_CODING_AGENT_VERSION}; \
+  test -x node_modules/@deepseek-ai/dsh/lib/bin.js; \
+  ln -sf /opt/deepsonar/dsh/node_modules/@deepseek-ai/dsh/lib/bin.js /usr/local/bin/dsh; \
+  npm cache clean --force
 
 RUN set -eu; \
   test "$(npm view pi-web-access@${PI_WEB_ACCESS_VERSION} dist.integrity)" = "$PI_WEB_ACCESS_INTEGRITY"; \

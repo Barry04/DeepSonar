@@ -51,7 +51,7 @@ async function insertJob(
     INSERT INTO jobs (project_id, canvas_id, type, status, payload_json, agent_snapshot_json)
     VALUES (
       ${projectId}, ${canvasId}, ${type}, ${status},
-      ${sql.json(payload)}, ${sql.json({ test_fixture: true })}
+      ${sql.json(payload as never)}, ${sql.json({ test_fixture: true })}
     )
     RETURNING *`;
   return job as DbRow;
@@ -164,7 +164,7 @@ async function testConcurrentReverify(missing?: MissingRequirement): Promise<voi
     FROM finding_verification_rounds WHERE finding_id = ${finding.id as string}`;
   const [confirmed] = await sql`
     SELECT verify_status FROM findings WHERE id = ${finding.id as string}`;
-  assert(verifyJobs.length === 0, `Fact-first 门禁通过后不应再派 verify_finding，实际 ${verifyJobs.length}`);
+  assert(verifyJobs.length === 0, `并发补证不应派 verify_finding，实际 ${verifyJobs.length}`);
   assert(rounds.length === 1, `并发补证后 round 数量应为 1，实际 ${rounds.length}`);
   if (missing) {
     const round = rounds[0];

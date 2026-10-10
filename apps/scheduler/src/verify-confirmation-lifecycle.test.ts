@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { VerificationEvidence } from "@deepsonar/shared-types";
+import { DonePayload, FactPayload, FindingPayload, VerificationEvidence } from "@deepsonar/shared-types";
 import {
   buildEvidenceSnapshot, closeVerifyRound, createVerifyRound, evaluateFindingFactGate,
   maybeReverifyAfterFollowup, projectVerifyEvidenceForPrompt,
 } from "./verify.js";
+import { fakeFindingPayload, fakeVerificationFact, fakeVerifyDone } from "./fake-agent-evidence.js";
 import { attachVerificationEvidence } from "./verify-attach-evidence.js";
 import { findingVerificationSummaries } from "./verify-summaries.js";
 import { findingProposalToArtifact } from "./domains/artifacts/model.js";
@@ -189,4 +190,38 @@ test("integrity-invalid refutation cannot settle refuted", async () => {
   const { tx, writes } = transaction(rows);
   await createVerifyRound(tx, { projectId: "project", canvasId: "canvas", finding, parentJobId: "origin", followupDepth: 0, priorityBase: 1 });
   assert.equal(writes.some(({ query, values }) => query.includes("UPDATE findings SET verify_status") && values.includes("refuted")), false);
+});
+
+
+test("fake emitted Finding and Facts satisfy the full security contract; Verify uses the same gate", () => {
+  const proposal = FindingPayload.parse(fakeFindingPayload());
+  assert.equal(proposal.profile, "security.vulnerability");
+  assert.equal(proposal.raw?.source, "fake-agent");
+  const subject = { id: FINDING, job_id: "origin", profile: proposal.profile, raw_json: { impact: proposal.impact } };
+  const rows = (["review", "test"] as const).map((kind) => ({
+    id: `${kind}-fact`, job_id: `${kind}-job`, job_type: kind, job_status: "succeeded",
+    body_json: FactPayload.parse(fakeVerificationFact(FINDING, `${kind}-job`, kind, null)),
+  }));
+  const snapshot = () => buildEvidenceSnapshot(rows, "origin");
+  assert.equal(evaluateFindingFactGate(subject, snapshot(), "origin").strategy.ok, true);
+  assert.equal(DonePayload.parse(fakeVerifyDone(subject, snapshot())).verdict, "confirmed");
+
+  for (const missing of ["impact_flow", "attempted_refutation", "qualified_test_artifact_refs", "independent_review"]) {
+    const incompleteSubject = structuredClone(subject);
+    const incompleteRows = structuredClone(rows);
+    if (missing === "impact_flow") incompleteSubject.raw_json.impact = undefined;
+    if (missing === "attempted_refutation") {
+      for (const row of incompleteRows) delete row.body_json.verification!.attempted_refutation;
+    }
+    if (missing === "qualified_test_artifact_refs") delete incompleteRows[1].body_json.verification!.artifact_refs;
+    if (missing === "independent_review") incompleteRows[0].body_json.verification!.expected = undefined;
+    const evidence = buildEvidenceSnapshot(incompleteRows, "origin");
+    const decision = evaluateFindingFactGate(incompleteSubject, evidence, "origin");
+    assert.equal(decision.strategy.gate.ok, true, "the inner Fact-first gate alone is insufficient");
+    assert.equal(decision.strategy.ok, false);
+    const done = DonePayload.parse(fakeVerifyDone(incompleteSubject, evidence));
+    assert.equal(done.verdict, "rework");
+    assert.ok(done.missing_evidence?.includes(missing), `${missing}: ${JSON.stringify(done)}`);
+  }
+  assert.equal(fakeVerifyDone(null, snapshot()).verdict, "rework");
 });

@@ -1684,6 +1684,11 @@ export async function runRealAgent(host: RuntimeHost, spec: RealAgentSpec): Prom
             spec.onEvent?.({ type: "run.retry_skipped", reason, cause: "compaction_required" });
           }
         } else if (reason) {
+          if (!adapter.persistentSessionResume) {
+            runError = `CONTEXT_RESUME_UNSUPPORTED: ${adapter.id} SDK cannot reopen a persisted session after process exit; start a new Job explicitly.`;
+            terminalOutcome = "failure";
+            break;
+          }
           const canResume = Boolean(sessionId && sessionResumeAttempts < CLI_SESSION_RESUME_MAX_ATTEMPTS);
           if (canResume) {
             sessionResumeAttempts++;

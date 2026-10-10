@@ -116,6 +116,7 @@ function detectFormat(
     }
     if (
       type === "user/message"
+      || type === "system/message"
       || type === "assistant/message"
       || type === "assistant/chunk"
       || type === "tool/call"
@@ -554,6 +555,19 @@ function parseDshRow(
   const rawContent = message.content;
   const content = Array.isArray(rawContent) ? rawContent : [];
   const timestamp = asString(row.timestamp) ?? (typeof row.time === "number" ? new Date(row.time).toISOString() : undefined);
+  if (type === "system/message") {
+    const systemText = Array.isArray(rawContent) ? contentToText(content) : contentToText(rawContent);
+    const item: SessionTimelineItem = {
+      id: `${index}-system`,
+      kind: "system",
+      title: "DSH system",
+      body: systemText || stringifyBody(message),
+      timestamp,
+    };
+    const tokens = extractUsage(message) ?? extractUsage(data) ?? extractUsage(row);
+    if (tokens) item.tokens = tokens;
+    return [item];
+  }
   if (type === "user/message" || type === "assistant/message") {
     const items: SessionTimelineItem[] = [];
     const roleKind: SessionItemKind = type === "user/message" ? "user" : "assistant";

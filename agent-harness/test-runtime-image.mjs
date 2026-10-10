@@ -11,10 +11,9 @@ if (!image || !["base", "audit", "kali-minimal"].includes(toolset)) {
 }
 const commands = [
   "git --version", "rg --version", "jq --version", "file --version", "python3 --version", "node --version", "claude --version",
-  "test -f /usr/local/lib/node_modules/@deepseek-ai/dsh-sdk-jsonrpc-demo/lib/packaged-bin.js",
-  "test \"$(node -p \"require('/usr/local/lib/node_modules/@deepseek-ai/dsh-sdk-jsonrpc-demo/package.json').version\")\" = 0.1.1-rc.2",
-  "test ! -d /usr/local/lib/node_modules/@deepseek-ai/dsh",
-  "! find /usr/local/lib/node_modules/@deepseek-ai -maxdepth 1 -type d \\( -name 'dsh-client-ui-*' -o -name 'dsh-client-web*' -o -name 'dsh-web-*' -o -name 'dsh-tool-ask-user' \\) | grep -q .",
+  "test -f /opt/deepsonar/dsh/node_modules/@deepseek-ai/dsh/lib/bin.js",
+  `test "$(node -p "require('/opt/deepsonar/dsh/node_modules/@deepseek-ai/dsh/package.json').version")" = ${config.npm["@deepseek-ai/dsh"].version}`,
+  "dsh --version",
   "test ! -d /usr/local/lib/node_modules/dsh-cc-tui",
 ];
 if (toolset !== "base") commands.push("objdump --version");
