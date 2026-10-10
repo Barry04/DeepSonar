@@ -953,7 +953,7 @@ CANVAS_LAYOUT=auto
 
 保鲜范围（至少覆盖）：
 
-1. **版本字面量**：`SCHEMA_VERSION`（`apps/scheduler/src/schema-version.ts`）与 `AGENTS.md`、`DESIGN.md`、`docs/**` 中出现的主线数字一致；发布版本号与 `package.json` / CHANGELOG 标题一致。
+1. **版本字面量**：`SCHEMA_VERSION`（`apps/scheduler/src/schema-version.ts`）与 `AGENTS.md`、`DESIGN.md`、`docs/**` 中出现的主线数字一致；产品发布版本以不可变 `vX.Y.Z` Git tag 为唯一来源，须与 CHANGELOG 对应标题和 compare link 一致；私有 workspace 的 `package.json` 版本仅是内部元数据，不参与发布版本解析，也不随平台发版 bump（见 [`RELEASE_RUNTIME_IMAGES.md`](RELEASE_RUNTIME_IMAGES.md)）。
 2. **本版删掉或收敛的机制**：全仓搜描述性文字（代码注释、OpenAPI 描述串、`docs/**`、`skills/**`）。命中只允许是「已移除 / 物理清扫」这类解释性出现（规则自身与 `CHANGELOG.md` 历史条目除外），不允许仍被当成 as-built 描述。
 3. **as-built 与代码相反**：本版触及的机制逐条对代码核一遍 `DESIGN.md` 与本文对应段。冲突以代码为准并回写文档，不允许改代码去迁就文档。
 4. **状态索引**：`docs/README.md` 的同步状态与日期、专题文档文首状态行（as-built / 进行中 / 历史）、新增或收口的 issue 表。

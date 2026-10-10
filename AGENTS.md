@@ -193,7 +193,7 @@ Canvas 只读，节点坐标由服务端布局生成。Finding 详情按 Issue �
 
 检查范围（每版必做，不能因为“本版没动文档”跳过）：
 
-1. **版本字面量**：`apps/scheduler/src/schema-version.ts` 的 `SCHEMA_VERSION` 与本文件、`DESIGN.md`、`docs/**` 里写的主线数字一致；发布版本号与 `package.json` / `CHANGELOG.md` 标题一致。
+1. **版本字面量**：`apps/scheduler/src/schema-version.ts` 的 `SCHEMA_VERSION` 与本文件、`DESIGN.md`、`docs/**` 里写的主线数字一致；产品发布版本以不可变 `vX.Y.Z` Git tag 为唯一来源，须与 `CHANGELOG.md` 对应标题和 compare link 一致；根目录及第一方 workspace 的私有 `package.json` 版本仅是内部元数据，不参与发布版本解析，也不因平台发版而 bump（见 `docs/RELEASE_RUNTIME_IMAGES.md`）。
 2. **本版删掉/收敛的机制**：代码注释、OpenAPI 描述串、`docs/**`、`skills/**` 全部搜一遍，命中只能是「已移除 / 物理清扫」这类解释性出现（规则自身与 `CHANGELOG.md` 历史条目除外）：
    ```bash
    rg -n "project_managed|image_strategy|role_runtime_images|项目镜像策略" \
