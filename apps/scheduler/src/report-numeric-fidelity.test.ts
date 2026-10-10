@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
+import { taskReportCoverageOk } from "./report-coverage.js";
 import {
   buildSarifFromConfirmed,
   finalizeTaskReportMarkdown,
@@ -209,7 +210,8 @@ test("Agent rephrase with coverage falls back to the deterministic template", ()
   const agentMarkdown = [
     `# 任务报告：${input.task.title}`,
     "",
-    `已确认问题：${finding.title}（${finding.id}）`,
+    "## 已确认问题",
+    `${finding.title}（${finding.id}）`,
     "Inventory counted 774 slots after ÷8 folding.",
   ].join("\n");
   const gate = checkReportNumericFidelity(
@@ -286,4 +288,71 @@ test("task report chapters split refuted/inconclusive and SARIF stays confirmed-
     runs: Array<{ results: Array<{ ruleId: string }> }>;
   };
   assert.deepEqual(sarif.runs[0]?.results.map((row) => row.ruleId), ["finding-1"]);
+});
+
+
+test("status words and duplicate titles cannot cover fifty distinct Findings", () => {
+  const findings = Array.from({ length: 50 }, (_, i) => ({
+    ...finding, id: `finding-human-${i}`, title: "同名 Finding", verify_status: "needs_human",
+    summary: "冻结输入中的具体证据与限制。".repeat(20), quantities: undefined,
+  }));
+  const input = reportInput({ findings, confirmed_findings: [], needs_human_findings: findings, facts: [] });
+  const source = JSON.stringify(input);
+  for (const text of ["等待进一步处理。".repeat(20), "## 待人工确认\n同名 Finding\n".repeat(50)]) {
+    const resolved = finalizeTaskReportMarkdown(input, text);
+    assert.equal(resolved.coverageOk, false);
+    assert.equal(resolved.usedDefault, "coverage");
+    assert.equal(taskReportCoverageOk(input, resolved.markdown), true);
+    assert.equal(resolved.numeric.ok, true);
+    assert.ok(Buffer.byteLength(resolved.markdown) > 8192, "Scheduler output is not limited by model summary bytes");
+    for (const item of findings) {
+      assert.ok(resolved.markdown.includes(`Finding ID：${item.id}\n`));
+      assert.ok(resolved.markdown.includes(item.summary));
+    }
+    assert.equal(JSON.stringify(input), source, "projection must not mutate frozen inputs");
+  }
+});
+
+test("coverage requires exact, unique IDs in the correct status chapter", () => {
+  const input = reportInput({ facts: [] });
+  for (const text of [
+    `## 已确认\n${finding.title}`,
+    `## 已确认\n${finding.id}0`,
+    `## 已确认\n${finding.id}-suffix`,
+    `## 已确认\n${finding.id}后缀`,
+    `## 待人工确认\n${finding.id}`,
+    `${finding.id}\n## 已确认\n${finding.title}`,
+    `## 已确认\n${finding.id}\n${finding.id}`,
+    `## 已确认\n\`\`\`text\n${finding.id}\n\`\`\``,
+  ]) assert.equal(taskReportCoverageOk(input, text), false, text);
+  assert.equal(taskReportCoverageOk(input, `## 已确认\n- Finding ID：\`${finding.id}\``), true);
+  assert.equal(taskReportCoverageOk(input, finalizeTaskReportMarkdown(input, "").markdown), true);
+});
+
+test("all status buckets retain their source IDs and use their own chapters", () => {
+  const statuses = ["confirmed", "refuted", "inconclusive", "needs_human", "pending"];
+  const findings = statuses.map((status) => ({
+    ...finding, id: `finding-${status}`, verify_status: status, quantities: undefined,
+    verification_policy: status === "pending"
+      ? { eligibility: "below_min_verify_severity" as const, min_verify_severity: "high" } : null,
+  }));
+  const input = reportInput({
+    findings, confirmed_findings: [findings[0]!], refuted_findings: [findings[1]!],
+    inconclusive_findings: [findings[2]!], needs_human_findings: [findings[3]!],
+    excluded_findings: [findings[4]!], facts: [],
+  });
+  const result = finalizeTaskReportMarkdown(input, "等待");
+  assert.equal(taskReportCoverageOk(input, result.markdown), true);
+  const misplaced = result.markdown.replace("## 待人工确认 / 验证限制", "## 已确认");
+  assert.equal(taskReportCoverageOk(input, misplaced), false);
+});
+
+
+test("equivalent English status headings enforce the same per-ID coverage", () => {
+  const input = reportInput({ facts: [] });
+  const text = `# Report\n## Confirmed Findings\n${finding.id}\n${formatQuantityLine(quantity)}`;
+  const result = finalizeTaskReportMarkdown(input, text);
+  assert.equal(result.usedDefault, null);
+  assert.equal(result.coverageOk, true);
+  assert.equal(taskReportCoverageOk(input, text.replace("Confirmed Findings", "Refuted Findings")), false);
 });

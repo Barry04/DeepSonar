@@ -5,9 +5,7 @@
 import { sql } from "./db.js";
 import {
   buildEvidenceSnapshot,
-  evaluateConfirmGate,
-  factFirstRecordsFromSnapshot,
-  resolveFindingSubjectRevision,
+  evaluateFindingFactGate,
 } from "./verify.js";
 import { readStoredStrategyContext } from "./verify-fact-gate.js";
 
@@ -22,7 +20,7 @@ export async function findingVerificationSummaries(
   const result = new Map<string, Record<string, unknown>>();
   if (ids.length === 0) return result;
   const findings = await tx`
-    SELECT id, verify_status, job_id, raw_json
+    SELECT id, profile, verify_status, job_id, raw_json
     FROM findings WHERE id = ANY(${ids as unknown as string[]}::uuid[])`;
   const rounds = await tx`
     SELECT DISTINCT ON (finding_id)
@@ -54,15 +52,7 @@ export async function findingVerificationSummaries(
     const round = roundByFinding.get(findingId);
     const originJobId = (finding.job_id as string) ?? null;
     const evidence = buildEvidenceSnapshot(evidenceByFinding.get(findingId) ?? [], originJobId);
-    const subjectRevision = resolveFindingSubjectRevision(
-      finding as Record<string, unknown>,
-      factFirstRecordsFromSnapshot(evidence),
-    );
-    const { gate, strategy } = evaluateConfirmGate(evidence, {
-      findingId,
-      subjectRevision,
-      originJobId,
-    });
+    const { gate, strategy } = evaluateFindingFactGate(finding, evidence, originJobId);
     const state = ((finding.raw_json as Record<string, unknown> | undefined)?.verification_state as Record<string, unknown> | undefined) ?? {};
     const requirements = (round?.requirements_json as Record<string, unknown> | undefined) ?? {};
     const stored = readStoredStrategyContext(

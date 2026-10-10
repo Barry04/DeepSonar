@@ -327,16 +327,25 @@ for (const leftover of ["@openai/codex", "opencode-ai"]) {
 }
 expect(!dockerfile.includes("CODEX_VERSION") && !dockerfile.includes("@openai/codex") && !dockerfile.includes("opencode-ai"), "Dockerfile.agent must not install leftover Codex/OpenCode");
 expect(!kaliDockerfile.includes("CODEX_VERSION") && !kaliDockerfile.includes("@openai/codex") && !kaliDockerfile.includes("opencode-ai"), "Dockerfile.agent-kali-minimal must not install leftover Codex/OpenCode");
+const claudePackage = "@anthropic-ai/claude-code";
+const claudeManifest = config.npm[claudePackage];
+expect(claudeManifest?.version === "2.1.296", "Claude Code version must remain pinned");
+expect(claudeManifest?.integrity === "sha512-OX/k/rpcthMqnFKOWcpNcbiLsMKtAjLOpQNJHlYiDCFUznWCIwdRTyl/p9SdHVrsrzZuPMCNqZjnpakIni6upw==", "Claude Code integrity drift");
+expect(kaliConfig.npm[claudePackage]?.integrity === claudeManifest?.integrity, "base/Kali Claude Code integrity must match");
+for (const imageDockerfile of [dockerfile, kaliDockerfile]) {
+  expect(imageDockerfile.includes(`ARG CLAUDE_CODE_INTEGRITY=${claudeManifest.integrity}`), "Claude Code integrity must be pinned in Docker ARG");
+  expect(imageDockerfile.includes("npm view @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} dist.integrity"), "Claude Code integrity must be verified during the image build");
+}
 const piPackage = "@earendil-works/pi-coding-agent";
 const piManifest = config.npm[piPackage];
-expect(piManifest?.version === "0.85.1", "Pi Coding Agent version must remain pinned");
-expect(piManifest?.integrity === "sha512-FGRN+OHbWaefBPGaTggAdLjrIHW+s2PzLyglz/5dfLzb9of7uuXMXYC0fJIeZTw+shS32o2cuQ9jF7YSDuL/oQ==", "Pi Coding Agent integrity drift");
+expect(piManifest?.version === "1.1.0", "Pi Coding Agent version must remain pinned");
+expect(piManifest?.integrity === "sha512-SeEi/4hdcHNgA9UWlefZl7ZZpm3dzi2OoxNjDHsBJ9o298LNOtbL4DGKgitlEj6uCTccvtw6f2hlCkTPVJ2RXg==", "Pi Coding Agent integrity drift");
 const piInstallRef = `${piPackage}@\${PI_CODING_AGENT_VERSION}`;
 const piIntegrityCheck = `npm view ${piInstallRef} dist.integrity`;
-expect(dockerfile.includes("ARG PI_CODING_AGENT_VERSION=0.85.1") && dockerfile.includes(piInstallRef), "Pi Coding Agent must be installed from the pinned Docker ARG");
-expect(kaliDockerfile.includes("ARG PI_CODING_AGENT_VERSION=0.85.1") && kaliDockerfile.includes(piInstallRef), "Kali Pi Coding Agent must be installed from the pinned Docker ARG");
-expect(dockerfile.includes("ARG PI_CODING_AGENT_INTEGRITY=sha512-FGRN+OHbWaefBPGaTggAdLjrIHW+s2PzLyglz/5dfLzb9of7uuXMXYC0fJIeZTw+shS32o2cuQ9jF7YSDuL/oQ==") && dockerfile.includes(piIntegrityCheck), "Pi Coding Agent integrity must be verified during the base image build");
-expect(kaliDockerfile.includes("ARG PI_CODING_AGENT_INTEGRITY=sha512-FGRN+OHbWaefBPGaTggAdLjrIHW+s2PzLyglz/5dfLzb9of7uuXMXYC0fJIeZTw+shS32o2cuQ9jF7YSDuL/oQ==") && kaliDockerfile.includes(piIntegrityCheck), "Kali Pi Coding Agent integrity must be verified during the image build");
+expect(dockerfile.includes("ARG PI_CODING_AGENT_VERSION=1.1.0") && dockerfile.includes(piInstallRef), "Pi Coding Agent must be installed from the pinned Docker ARG");
+expect(kaliDockerfile.includes("ARG PI_CODING_AGENT_VERSION=1.1.0") && kaliDockerfile.includes(piInstallRef), "Kali Pi Coding Agent must be installed from the pinned Docker ARG");
+expect(dockerfile.includes("ARG PI_CODING_AGENT_INTEGRITY=sha512-SeEi/4hdcHNgA9UWlefZl7ZZpm3dzi2OoxNjDHsBJ9o298LNOtbL4DGKgitlEj6uCTccvtw6f2hlCkTPVJ2RXg==") && dockerfile.includes(piIntegrityCheck), "Pi Coding Agent integrity must be verified during the base image build");
+expect(kaliDockerfile.includes("ARG PI_CODING_AGENT_INTEGRITY=sha512-SeEi/4hdcHNgA9UWlefZl7ZZpm3dzi2OoxNjDHsBJ9o298LNOtbL4DGKgitlEj6uCTccvtw6f2hlCkTPVJ2RXg==") && kaliDockerfile.includes(piIntegrityCheck), "Kali Pi Coding Agent integrity must be verified during the image build");
 const sharedPiExtensions = readFileSync(new URL("../packages/shared-types/src/pi-extensions.ts", import.meta.url), "utf8");
 const basePiWeb = config.piExtensions?.["pi-web-access"];
 const kaliPiWeb = kaliConfig.piExtensions?.["pi-web-access"];

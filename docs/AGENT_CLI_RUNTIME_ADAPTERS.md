@@ -45,8 +45,8 @@ The current registry (`AGENT_CLI_RUNTIME_ADAPTERS`) contains three write/run CLI
 
 | Adapter | CLI | Protocol | Incremental messages | Context policy | `context_window_tokens` materialization | Structured reasoning |
 | --- | --- | --- | --- | --- | --- | --- |
-| `claude-code` | Claude Code 2.1.258 | `stream-json` + governed `--include-partial-messages` | yes | Automatic compaction; defaults `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` to `70`, with an explicit environment value taking precedence | 无受支持的绝对窗口落点；只冻结/展示，不注入伪造 flag/env | `stream_event` thinking/text deltas and complete assistant blocks |
-| `pi` | Pi Coding Agent 0.85.1 | `pi --mode rpc --no-approve` 严格 LF JSONL | yes | 自动上下文策略由 Pi 管理；恢复只接受 `get_state` 返回的精确 `sessionFile` | `models.json` model `contextWindow` | `message_update` 的结构化文本/思考事件 |
+| `claude-code` | Claude Code 2.1.296 | `stream-json` + governed `--include-partial-messages` | yes | Automatic compaction; defaults `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` to `70`, with an explicit environment value taking precedence | 无受支持的绝对窗口落点；只冻结/展示，不注入伪造 flag/env | `stream_event` thinking/text deltas and complete assistant blocks |
+| `pi` | Pi Coding Agent 1.1.0 | `pi --mode rpc --no-approve` 严格 LF JSONL | yes | 自动上下文策略由 Pi 管理；恢复只接受 `get_state` 返回的精确 `sessionFile` | `models.json` model `contextWindow` | `message_update` 的结构化文本/思考事件 |
 | `dsh` | DeepSeek Harness 0.1.1-rc.2 | 官方 SDK JSON-RPC packaged entrypoint，严格 LF JSONL；RoleConfig 可冻结 Standard（native tools）或 PTC（Code Mode `run_code`） | yes | 由 `@deepseek-ai/dsh-compaction-basic` 管理；恢复复用精确 session ID | DSH profile model 配置 | `session.event` 的结构化 reasoning 事件 |
 
 DSH 的首条 system 消息（agent-spine `persona` / `DSH_SYSTEM_PROMPT`）会进入上游
@@ -63,8 +63,11 @@ system prompt 单独作为 `input[0]` 会 401 `unauthorized client`。适配器�
 只有上下文策略受支持时才准入。语义事件只走 Job 级 HTTP
 控制 API，不注入控制 MCP，也不把 CLI 流中的伪造 MCP tool call 映射为语义事件。DSH 的 `dsh_task_mode` 不是 JSON-RPC 初始化参数：适配器在 Job 启动前按冻结值物化 Cordis composition，`standard` 配置 `dsh-tools mode: native`，`ptc` 配置 `mode: code` 并挂载 `@deepseek-ai/dsh-code-runtime-worker-thread`。LLM composition 固定使用官方 `@deepseek-ai/dsh-llm-pi-ai`；Credential 中的 Provider YAML 按官方 `settings.yaml` 结构保存 `llm-pi-ai.providers` 与 `agent-default-model`，可声明任意安全 route 及单一 OpenAI/Anthropic 兼容 profile。DSH 默认强度只能是 Pi-AI 规范档位，模型 `reasoningEfforts` 把规范档位映射为第三方 wire value。Job 冻结 route/model/Provider-owned `reasoning` 后，运行时将 profile 强制投影到 Job Model Gateway，并以该 route/model 调用 JSON-RPC `initialize`；沙箱只得到短期 `DEEPSONAR_GATEWAY_TOKEN`。Base/Audit/Kali 镜像同时安装按 Git commit 与 tarball SHA-256 固定的 MIT 插件 `dsh-reasoning-settings@0.3.0`；生成的无 UI Cordis composition 只挂载其 host 部分，为已配置的单 route/model 提供 Subagent 按次选择和思考强度继承，不引入 Web client。相关官方 npm 包按版本与 integrity 固定。DSH 动态 Skill 物化到 `${DSH_HOME}/skills/<name>/SKILL.md`，由 `dsh-skill-filesystem` 发现并通过 `dsh-tool-skill` 按需加载；平台内置 `deepsonar-control` Skill 走同一路径。
 
-Cordis 字段必须按镜像中钉死版本的插件 Schema 生成，不能用布尔“启用”猜测配置形态。当前
-完整 DSH package closure 统一固定为 `0.1.1-rc.2`，避免 prerelease peer range 混装。`@deepseek-ai/dsh-agent-spine-demo` 的 `toolBash` 是
+截至 2026-10-10，Pi 固定为官方稳定发布 `1.1.0`，Claude Code 固定为默认 `latest` 发布通道的具体版本 `2.1.296`（不是可变 tag）；Claude 官方延迟约一周的 `stable` 通道当日为 `2.1.287`。版本来源：[Pi release](https://github.com/earendil-works/pi/releases/tag/v1.1.0)、[Claude release channels](https://code.claude.com/docs/en/setup#configure-release-channel)。
+
+完整 DSH package closure 统一固定为 `0.1.1-rc.2`，避免 prerelease peer range 混装。同日核验 npm：现用 [`@deepseek-ai/dsh-sdk-jsonrpc-demo`](https://www.npmjs.com/package/@deepseek-ai/dsh-sdk-jsonrpc-demo) entrypoint 仍只发布到 `0.1.1-rc.2`，其 `latest` 指向更旧的 `0.0.1-rc.5`；虽然 SDK server 等包的 `next` 已到 `0.2.0-rc.2`，它们不构成当前 entrypoint 的统一升级闭包。因此保留该固定闭包，禁止单独跟随各包的可变 dist-tag 混装。
+
+Cordis 字段必须按镜像中钉死版本的插件 Schema 生成，不能用布尔“启用”猜测配置形态。`@deepseek-ai/dsh-agent-spine-demo` 的 `toolBash` 是
 `false | @deepseek-ai/dsh-tool-bash.Config`；平台传入对象并只允许 spine 挂载一次 bash，
 不得生成非法的 `toolBash: true` 或再独立注册同一工具。bash executor 的 subprocess 服务由
 固定 integrity 的 `@deepseek-ai/dsh-subprocess-local` 显式提供，`timeoutMs` 归 executor 配置。
@@ -137,7 +140,7 @@ never infers or fabricates reasoning from ordinary text, tool output, or
 terminal lines. If the selected CLI/model does not emit a supported reasoning
 event, the live and archived stream simply contains no reasoning block.
 
-Claude partial frames are enabled only for the pinned 2.1.258 governed minimum
+Claude partial frames are enabled only for the pinned 2.1.296 governed minimum
 above. `content_block_delta` `thinking_delta`/`text_delta` frames are
 normalized to `reasoning.delta`/`text.delta`; the later complete assistant
 message remains accepted for compatibility but is de-duplicated against those
@@ -170,15 +173,32 @@ remain outside the snapshot and are not emitted by adapter codecs.
 
 ## Pi Coding Agent RPC（#140）
 
-Pi 的启动命令由适配器固定为 `pi --mode rpc --no-approve --no-extensions
---session-dir /workspace/.deepsonar-home/.pi/agent`。初始提示通过 RPC 输入发送；运行中
-消息使用 `steer` 或 `follow_up`，启动后先发送 `get_state` 获取会话身份。每个输入块都交给
-同一个持久 `TextDecoder`，再按 LF 分帧；CRLF 会去掉回车，U+2028/U+2029 仍保留为数据。
+Pi 的启动命令由适配器固定为 `pi --mode rpc --no-approve --no-extensions`，使用
+隔离 HOME `/workspace/.deepsonar-home` 下默认的 `.pi/agent/sessions/<cwd>/` 会话布局；
+不覆盖 `--session-dir`，避免 Pi 1.1.0 返回的会话路径与实际写入路径不一致而在恢复时新建会话。
+每次启动或重启均先发送带请求 ID 的 `get_state`，取得并校验 `sessionId` 与精确
+`sessionFile` 后才允许输入；恢复时两者必须与已绑定身份一致。
+
+初始提示、运行中增量消息和完成门 nudge 统一发送 `prompt` 加
+`streamingBehavior: "steer"`：由 Pi 原子地决定在空闲时启动新回合，或在运行时排队，
+不依赖宿主观测状态发送裸 `steer` / `follow_up`。驱动串行写入、匹配响应 ID 和 command，
+成功响应的 `disposition` 必须为 `started` 或 `queued`；ACK 与新回合 `agent_start`
+均有 10 秒等待上限，未确认输入不会自动重放。新回合清空前一回合的临时失败/输出状态；
+输入 ACK 未返回时，不把并发到达的 `agent_settled` 当成可关闭输入或追加 nudge 的边界。
+
+每个输入块都交给同一个持久 `TextDecoder`，再按 LF 分帧；CRLF 会去掉回车，
+U+2028/U+2029 仍保留为数据。
 半帧、非法 UTF-8、空行、超大行和未知事件均 fail closed，`finish()` 会显式拒绝尾部残帧。
 
 `agent_end`、进程退出和普通响应都不能宣告成功，只有 `agent_settled` 提供 Agent 侧静止
 信号；Scheduler 仍要求已授权的 `mark_job_done` 通过完成门。临时网络错误在同一沙箱内最多
 按原会话恢复三次，恢复必须使用 `get_state` 返回并经过路径校验的精确 `sessionFile`。
+
+`agent-harness/test-pi-rpc.mjs` 使用确定性 mock provider 驱动真实 Pi 进程，覆盖首次回合、
+空闲 nudge、无效 RPC、SIGKILL 后精确会话恢复及恢复后的回合；同时确认显式扩展生命周期
+与项目 `.pi` 扩展禁止自动加载。可用 `DEEPSONAR_PI_BINARY` 指定本地 Pi 1.1.0 二进制运行，
+未指定时使用官方镜像。2026-10-10 已通过本地真实 CLI 路径；这不代替容器构建、镜像体积、
+沙箱网络隔离或真实厂商模型 E2E。
 
 Pi 不物化 MCP 配置，也不调用 `pi.registerTool`。平台静态 `deepsonar-control` Skill 固定物化到
 `~/.pi/agent/skills/deepsonar-control/SKILL.md`，引导调用
@@ -199,7 +219,7 @@ ambiguous。模型请求统一改写到 Gateway，
 未注册 id、用户上传的扩展源码、以及镜像目录外的 `-e` 路径一律拒绝。出网扩展服从任务
 `allow_egress`；本路径不向快照或工作区写入长期密钥。已注册扩展预置到兼容镜像的
 `/opt/deepsonar/pi-extensions/node_modules/`（pilot `pi-web-access` 只进 audit / kali-minimal，
-不进 size-gated 的 base），与 `@earendil-works/pi-coding-agent@0.85.1` 一样按 version + integrity 校验。
+不进 size-gated 的 base），与 `@earendil-works/pi-coding-agent@1.1.0` 一样按 version + integrity 校验。
 
 ## Verification
 
@@ -226,7 +246,7 @@ separately from adapter or parser failures. Mock LLM is not a substitute.
 | 契约 | 输入 | 输出 | 家 | 钉死版本 | 状态 |
 | --- | --- | --- | --- | --- | --- |
 | 请求兼容投影 | 平台 system prompt | 进入上游 `input[0]` 的 pi 风格首帧 | `dsh-request-frame.ts` | DSH `0.1.1-rc.2` | **已完整**（#321）。证据：`projectDshSystemPrompt` + `runtime-adapters.test.ts`「DSH request frame」 |
-| 运行事件解码 | CLI 结构化 stdout（Pi RPC JSONL / DSH JSON-RPC） | 宿主归一化事件（`assistant` / `user` / `result` / `unknown_runtime` / `agent_settled`） | `runtime-adapters.ts` `decodePi` / `decodeDsh` | Pi `0.85.1` · DSH `0.1.1-rc.2` | **产品字段已齐**。#320 只补错误串内嵌 JSON 的 `message` 提取，不是整解码器。#389 补的是 DSH 未知/损坏帧可诊断，以及独立 `tool/call` / `tool/result` |
+| 运行事件解码 | CLI 结构化 stdout（Pi RPC JSONL / DSH JSON-RPC） | 宿主归一化事件（`assistant` / `user` / `result` / `unknown_runtime` / `agent_settled`） | `runtime-adapters.ts` `decodePi` / `decodeDsh` | Pi `1.1.0` · DSH `0.1.1-rc.2` | **产品字段已齐**。#320 只补错误串内嵌 JSON 的 `message` 提取，不是整解码器。#389 补的是 DSH 未知/损坏帧可诊断，以及独立 `tool/call` / `tool/result` |
 | Session 归档 / 查看器 | 沙箱内本次 session artifact | 时间线 / usage / 工具统计 / 原始下载 | `cli-session-adapters.ts` + `apps/web/src/session-viewer/` | 同上 | **已完整**。归档失败显式 `captureError`；查看器 `skipped` + `other` 诊断未知/损坏行；「下载原始文件」不改写字节 |
 
 产品必需字段与真实缺口（只填缺口，已齐层不重写）：

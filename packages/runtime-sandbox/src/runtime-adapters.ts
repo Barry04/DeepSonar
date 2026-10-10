@@ -62,7 +62,7 @@ export function resolvePiCliModelId(model: string | undefined | null): string | 
 }
 
 /**
- * Pi 0.85.1 rejects a bare catalog id when it exists on multiple built-in
+ * Pi 1.1.0 rejects a bare catalog id when it exists on multiple built-in
  * providers. Pass `--provider <route> --model <id>` (not `--model provider/id`).
  */
 export function resolvePiCliLaunchFlags(
@@ -440,11 +440,11 @@ function sandboxClaude(
 
 const claude = Object.freeze<RuntimeAdapter>({
   id: "claude-code",
-  version: "2.1.258",
+  version: "2.1.296",
   outputMode: "jsonl",
   capabilities: fixedCapabilities({ streamEvents: true, platformControlApi: true, incrementalMessages: true, completionGate: true, sessionCapture: true, contextCompaction: true, contextCompactionPolicy: "automatic", reasoningEffort: true, interactiveTerminal: true }),
   compatibleImageKeys: ALL_IMAGE_KEYS,
-  // Claude Code 2.1.258 is the governed pin (npm latest). That
+  // Claude Code 2.1.296 is the governed pin (npm latest). That
   // contract supports partial stream-json frames; do not pass this flag to
   // an adapter whose pinned minimum does not support it.
   start: (context) => sandboxClaude(context.host, context),
@@ -594,6 +594,7 @@ function decodePi(line: Record<string, unknown>, state: AdapterRuntimeState): Re
     const message = line.message && typeof line.message === "object" && !Array.isArray(line.message)
       ? line.message as Record<string, unknown>
       : undefined;
+    if (message?.role && message.role !== "assistant") return [];
     const stopReason = String(message?.stopReason ?? line.stopReason ?? "");
     if (stopReason === "error" || stopReason === "aborted") {
       const raw = piMessageEndErrorRaw(line, message);
@@ -604,17 +605,18 @@ function decodePi(line: Record<string, unknown>, state: AdapterRuntimeState): Re
     const unseen = text ? unseenCompleteText(state, "text", text) : undefined;
     if (unseen) state.finalText = `${state.finalText ?? ""}${unseen}`;
     if (!unseen && isEmptyPiModelResponse(message, state)) {
-      return [{ type: "result", subtype: "error", is_error: true, result: "PI_EMPTY_MODEL_RESPONSE" }];
+      return fail("PI_EMPTY_MODEL_RESPONSE");
     }
     return unseen ? [{ type: "assistant", message: { content: [{ type: "text", text: unseen }] } }] : [];
   }
   if (type === "agent_settled") {
+    if (line.aborted === true) return fail("Pi agent aborted");
     if (state.failed) return [{ type: "result", subtype: "error", is_error: true, result: state.errorDetail ?? "Pi runtime failed" }];
     return [{ type: "agent_settled", session_id: state.sessionId, session_file: state.sessionFile, result: state.finalText ?? "" }];
   }
   if (type === "agent_end") return [{ type: "agent_end" }];
   if (type === "error" || type === "extension_error") {
-    return [runtimeErrorResult(textFrom(line.error ?? line.message ?? line.errorMessage), "Pi runtime failed")];
+    return failRuntime(textFrom(line.error ?? line.message ?? line.errorMessage), "Pi runtime failed");
   }
   if (["tool_execution_start", "tool_execution_update", "tool_execution_end"].includes(type)) {
     const tool = line.toolCall && typeof line.toolCall === "object" && !Array.isArray(line.toolCall)
@@ -644,7 +646,7 @@ function sandboxPi(host: RuntimeHost, context: AdapterStartContext, sessionFile?
     }
     return ` -e ${shellQuote(extension)}`;
   }).join("");
-  let command = `pi --mode rpc --no-approve --no-extensions --session-dir /workspace/.deepsonar-home/.pi/agent${extensions}`;
+  let command = `pi --mode rpc --no-approve --no-extensions${extensions}`;
   if (sessionFile) command += ` --session ${shellQuote(sessionFile)}`;
   const launch = resolvePiCliLaunchFlags(context.model, context.modelProvider);
   if (launch.cliModel) command += ` --model ${shellQuote(launch.cliModel)}`;
@@ -656,7 +658,7 @@ function sandboxPi(host: RuntimeHost, context: AdapterStartContext, sessionFile?
 
 const pi = Object.freeze<RuntimeAdapter>({
   id: "pi",
-  version: "0.85.1",
+  version: "1.1.0",
   outputMode: "jsonl",
   capabilities: fixedCapabilities({
     streamEvents: true,
@@ -671,8 +673,10 @@ const pi = Object.freeze<RuntimeAdapter>({
   }),
   compatibleImageKeys: ALL_IMAGE_KEYS,
   start: (context) => sandboxPi(context.host, context),
-  resume: (context) => {
+  resume: async (context) => {
     if (!context.sessionFile) throw new Error("PI_SESSION_FILE_MISSING");
+    const check = await context.host.run(`test -s ${shellQuote(context.sessionFile)}`, { timeoutMs: 10_000 });
+    if (check.exitCode !== 0) throw new Error("PI_SESSION_FILE_MISSING_OR_EMPTY");
     return sandboxPi(context.host, context, context.sessionFile);
   },
   encodeInput: (content) => `${JSON.stringify({ type: "prompt", message: content })}\n`,

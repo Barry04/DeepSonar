@@ -164,6 +164,7 @@ export function findingProposalToArtifact(finding: NormalizedFindingProposal): A
         location: finding.location,
         rule_id: finding.rule_id,
         quantities: finding.quantities,
+        impact: finding.impact,
       }),
     },
     body: compact({

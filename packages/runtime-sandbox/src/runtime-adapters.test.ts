@@ -48,11 +48,11 @@ function fakeSandbox(): {
       commands.push(command);
       envs.push(options.env ?? {});
       ptys.push(options.pty);
-      return {} as never;
+      return { exitCode: 0, stdout: "", stderr: "" } as never;
     },
     run: async (command: string) => {
       runCommands.push(command);
-      return {} as never;
+      return { exitCode: 0, stdout: "", stderr: "" } as never;
     },
     uploadFile: async (content: string, path: string) => {
       uploads.push({ path, content });
@@ -409,7 +409,7 @@ test("Pi RPC 固定启动参数、状态查询和精确 sessionFile 恢复", asy
   } as const;
   await adapter.start(context);
   await adapter.resume({ ...context, input: "follow", sessionId: "pi-s1", sessionFile: "/workspace/.deepsonar-home/.pi/agent/s.jsonl" });
-  assert.match(fake.commands[0] ?? "", /^pi --mode rpc --no-approve --no-extensions --session-dir \/workspace\/\.deepsonar-home\/\.pi\/agent/);
+  assert.match(fake.commands[0] ?? "", /^pi --mode rpc --no-approve --no-extensions/);
   assert.doesNotMatch(fake.commands[0] ?? "", /mcp|control-mcp/);
   assert.match(fake.commands[0] ?? "", /--thinking 'high'/);
   assert.match(fake.commands[1] ?? "", /--thinking 'high'/);
@@ -725,9 +725,9 @@ function loadJsonlFixture(name: string): Record<string, unknown>[] {
     .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
-test("Pi 0.84.4 runtime fixture covers required decode fields and unknown frames", () => {
+test("Pi terminal-error runtime fixture covers required decode fields and unknown frames", () => {
   const adapter = AGENT_CLI_RUNTIME_ADAPTERS.pi;
-  assert.equal(adapter.version, "0.85.1");
+  assert.equal(adapter.version, "1.1.0");
   const state: Record<string, unknown> = {};
   const decoded = loadJsonlFixture("pi-0.84.4.runtime.jsonl").flatMap((line) => adapter.decodeOutput(line, state));
   assert.equal(state.sessionId, "pi-sess-0844");
@@ -738,7 +738,7 @@ test("Pi 0.84.4 runtime fixture covers required decode fields and unknown frames
   assert.ok(decoded.some((event) => event.type === "tool_progress"));
   assert.ok(decoded.some((event) => event.type === "user" && JSON.stringify(event).includes("tool_result")));
   assert.ok(decoded.some((event) => event.is_error === true && String(event.result).includes("无效的令牌")));
-  assert.ok(decoded.some((event) => event.type === "agent_settled"));
+  assert.equal(decoded.some((event) => event.type === "agent_settled"), false);
   assert.ok(decoded.some((event) => event.type === "unknown_runtime"));
   assert.throws(() => parsePiJsonlRecord(JSON.stringify({ type: "future_unknown_event" })), /PI_RPC_UNEXPECTED_EVENT/);
 });
@@ -788,3 +788,16 @@ test("DSH unknown session.event and methods are diagnosable and do not become co
   assert.equal(mapped.semanticEvents.length, 0);
   assert.equal(mapped.warnings[0]?.code, "unknown_control_tool");
 });
+
+for (const record of [
+  { type: "extension_error", error: "extension failure" },
+  { type: "message_end", message: { role: "assistant", content: [], usage: { input: 0, output: 0 } } },
+  { type: "agent_settled", aborted: true },
+]) {
+  test(`Pi latches terminal failure from ${record.type}`, () => {
+    const state = {};
+    const adapter = AGENT_CLI_RUNTIME_ADAPTERS.pi;
+    assert.equal(adapter.decodeOutput(record, state)[0]?.is_error, true);
+    assert.equal(adapter.decodeOutput({ type: "agent_settled" }, state)[0]?.is_error, true);
+  });
+}

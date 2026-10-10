@@ -668,12 +668,13 @@ function retryLines(
     const state = {
       type: "response",
       command: "get_state",
+      id: "deepsonar-1",
       success: true,
       data: { sessionId, sessionFile: `/workspace/.deepsonar-home/.pi/agent/${sessionId}.jsonl` },
     };
     return phase === "ok"
-      ? [state, { type: "message_end", message: { content: [{ type: "text", text: "ok" }] } }, { type: "agent_settled" }]
-      : [state, { type: "error", message: err }];
+      ? [state, { type: "response", id: "deepsonar-2", command: "prompt", success: true, data: { disposition: "started" } }, { type: "agent_start" }, { type: "message_end", message: { content: [{ type: "text", text: "ok" }] } }, { type: "agent_settled" }]
+      : [state, { type: "response", id: "deepsonar-2", command: "prompt", success: true, data: { disposition: "started" } }, { type: "agent_start" }, { type: "error", message: err }];
   }
   return phase === "ok"
     ? [{ jsonrpc: "2.0", method: "session.status", params: { status: "idle", sessionId: "session-poc162" } }]

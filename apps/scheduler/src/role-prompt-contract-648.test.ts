@@ -6,13 +6,16 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   DONE_SUMMARY_MAX_BYTES,
+  EmitFindingDirectPayload,
+  DonePayload,
   VERIFY_REPORT_PLATFORM_TOOLS,
   allowedPlatformTools,
   resolvePlatformTools,
 } from "@deepsonar/shared-types";
+import { instructionDocument, resultContract } from "./executor-real.js";
 import { platformToolGuide } from "./platform-tools.js";
 import { buildVerifyJobPrompt } from "./verify-prompt.js";
-import { RUNTIME_TEST_TOOLCHAIN_POLICY } from "./domains/role-runtime-snapshot/application.js";
+import { RUNTIME_TEST_TOOLCHAIN_POLICY, withRuntimeTestToolchainPolicy, runtimeEvidencePolicy, SPECIALTY_RUNTIME_IMAGE_POLICIES } from "./domains/role-runtime-snapshot/application.js";
 
 const schemaSql = readFileSync(new URL("../../../database/schema.sql", import.meta.url), "utf8");
 const executorSource = readFileSync(new URL("./executor-real.ts", import.meta.url), "utf8");
@@ -53,7 +56,7 @@ test("#648 mark_job_done summary copy uses 8192 UTF-8 bytes", () => {
   assert.doesNotMatch(platformToolsSource, /最多 10000/);
   const guide = platformToolGuide(["mark_job_done"]);
   assert.match(guide, /8192 UTF-8 字节/);
-  assert.match(guide, /压缩证据描述文字.*Finding ID/);
+  assert.match(guide, /确定性模板.*Finding ID/);
 });
 
 test("#648 verify/report empty platform_tools_json expands to strict allowlist only", () => {
@@ -134,8 +137,8 @@ test("Hub prompt treats injected YAML as an initial projection and scopes Worker
 });
 
 test("#648 test toolchain policy does not conflate inconclusive with needs_human", () => {
-  assert.match(RUNTIME_TEST_TOOLCHAIN_POLICY, /outcome=inconclusive/);
-  assert.match(RUNTIME_TEST_TOOLCHAIN_POLICY, /mark_job_done\.verdict only/);
+  assert.match(runtimeEvidencePolicy("test"), /outcome=inconclusive/);
+  assert.match(runtimeEvidencePolicy("test"), /mark_job_done\.verdict only/);
   assert.doesNotMatch(RUNTIME_TEST_TOOLCHAIN_POLICY, /inconclusive\/needs-human evidence/);
   assert.match(schemaSql, /outcome=inconclusive/);
   assert.match(schemaSql, /needs_human` 仅是 `mark_job_done\.verdict`/);
@@ -155,4 +158,71 @@ test("#648 review/test emit_fact.description examples meet min length 16", () =>
     assert.ok(m, `${label} example missing`);
     assert.ok([...m![1]!].length >= 16, `${label} description too short: ${m![1]}`);
   }
+});
+
+
+function seededRole(name: string): string {
+  const marker = `('${name}', $instructions$`;
+  const start = schemaSql.indexOf(marker);
+  assert.ok(start >= 0);
+  return schemaSql.slice(start + marker.length, schemaSql.indexOf("$instructions$)", start));
+}
+
+function composedInstructions(role: "verify" | "test" | "report", image: string): string {
+  const tools = resolvePlatformTools(role, role === "test" ? "role" : "system", {});
+  return instructionDocument({
+    role, roleDescription: role,
+    customInstructions: withRuntimeTestToolchainPolicy(role, seededRole(role), image),
+    allowEgress: false,
+    contract: resultContract(tools, false, role === "test", role === "verify", false),
+    toolGuide: platformToolGuide(tools), enabledTools: tools, disabledTools: [],
+  });
+}
+
+test("the emitted Finding guide example satisfies the actual schema", () => {
+  const guide = platformToolGuide(["emit_finding"]);
+  const example = guide.match(/- 示例：`([^`]+)`/);
+  assert.ok(example);
+  assert.equal(EmitFindingDirectPayload.safeParse(JSON.parse(example[1]!)).success, true);
+});
+
+test("the emitted rework guide requires a nonempty missing_evidence array", () => {
+  const guide = platformToolGuide(["mark_job_done"]);
+  assert.match(guide, /rework` 必须提供非空 `missing_evidence`/);
+  assert.doesNotMatch(guide, /可选 `missing_evidence`/);
+  const example = guide.match(/- rework 示例：`([^`]+)`/);
+  assert.ok(example);
+  assert.equal(DonePayload.safeParse(JSON.parse(example[1]!)).success, true);
+});
+
+test("composed Verify instructions respect allowed operations for every official image", () => {
+  for (const image of ["deepsonar-base", "deepsonar-kali-minimal", ...SPECIALTY_RUNTIME_IMAGE_POLICIES.map((p) => p.image_key)]) {
+    const policy = withRuntimeTestToolchainPolicy("verify", null, image)!;
+    assert.doesNotMatch(policy, /emit_fact|request_human/);
+    assert.match(policy, /verdict=rework.*nonempty missing_evidence/);
+    assert.match(policy, /verdict=needs_human/);
+    const composed = composedInstructions("verify", image);
+    assert.match(composed, /missing_evidence/);
+    assert.doesNotMatch(composed, /submit emit_fact|blockers use request_human|submit structured inconclusive\/needs_human/);
+    assert.equal((composed.match(/### Runtime evidence submission/g) ?? []).length, 1);
+  }
+});
+
+test("composed ordinary Test instructions do not require an invented Finding", () => {
+  const composed = composedInstructions("test", "deepsonar-mobile");
+  assert.match(composed, /Without a target Finding, submit an ordinary emit_fact/);
+  assert.match(composed, /omit verification and never invent a finding_id/);
+  assert.match(composed, /没有目标 Finding 时只提交普通 Fact/);
+  assert.match(composed, /attempted_refutation/);
+  assert.doesNotMatch(composed, /submit structured inconclusive\/needs_human/);
+});
+
+test("Report composition permits bounded summary and deterministic large-report projection", () => {
+  const composed = composedInstructions("report", "deepsonar-base");
+  assert.match(composed, /8192 UTF-8 字节/);
+  assert.match(composed, /不能容纳时提交有界摘要/);
+  assert.match(composed, /Scheduler.*完整确定性模板/);
+  assert.doesNotMatch(composed, /summary` 为\*\*完整 Markdown 正文/);
+  assert.doesNotMatch(executorSource, /尽量引用 Finding id 或标题/);
+  assert.match(executorSource, /不能容纳时只提交有界摘要，Scheduler 从冻结 report-input\.json/);
 });

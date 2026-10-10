@@ -4,8 +4,9 @@ import os from "node:os";
 import path from "node:path";
 
 const image = process.argv[2] ?? process.env.DEEPSONAR_PI_IMAGE ?? "deepsonar-base:ci";
-const SESSION_ROOT = "/workspace/.deepsonar-home/.pi/agent";
-const EXTENSION_PATH = `${SESSION_ROOT}/extensions/governed-lifecycle.mjs`;
+const localPi = process.env.DEEPSONAR_PI_BINARY;
+let SESSION_ROOT = "/workspace/.deepsonar-home/.pi/agent";
+let EXTENSION_PATH = `${SESSION_ROOT}/extensions/governed-lifecycle.mjs`;
 const SMOKE_MODEL = "deepsonar-smoke/pi-rpc-smoke";
 const REQUEST_TIMEOUT_MS = 10_000;
 
@@ -110,7 +111,7 @@ function dockerArgs(paths, containerName, sessionFile) {
     "-v", `${paths.markerDir}:/tmp/pi-smoke`,
     "-e", "HOME=/workspace/.deepsonar-home",
     image,
-    "pi", "--mode", "rpc", "--no-approve", "--offline", "--no-extensions", "--session-dir", SESSION_ROOT,
+    "pi", "--mode", "rpc", "--no-approve", "--offline", "--no-extensions",
     "--model", SMOKE_MODEL, "-e", EXTENSION_PATH,
   ];
   if (sessionFile) args.push("--session", sessionFile);
@@ -118,7 +119,13 @@ function dockerArgs(paths, containerName, sessionFile) {
 }
 
 function startPi(paths, containerName, sessionFile) {
-  const child = spawn("docker", dockerArgs(paths, containerName, sessionFile), { stdio: ["pipe", "pipe", "pipe"] });
+  const args = dockerArgs(paths, containerName, sessionFile);
+  const child = localPi
+    ? spawn(localPi, args.slice(args.indexOf("pi") + 1), {
+      cwd: paths.workspaceDir, env: { ...process.env, HOME: paths.workspaceDir, PI_CODING_AGENT_DIR: SESSION_ROOT },
+      stdio: ["pipe", "pipe", "pipe"],
+    })
+    : spawn("docker", args, { stdio: ["pipe", "pipe", "pipe"] });
   const reader = new StrictJsonlReader();
   const stderr = [];
   child.stdout.on("data", (chunk) => reader.push(chunk));
@@ -150,7 +157,8 @@ function waitForChildExit(child) {
 async function stopPi(runtime) {
   if (runtime.child.exitCode !== null) return;
   try {
-    execFileSync("docker", ["stop", "--time", "5", runtime.containerName], { stdio: "ignore" });
+    if (localPi) runtime.child.kill("SIGTERM");
+    else execFileSync("docker", ["stop", "--time", "5", runtime.containerName], { stdio: "ignore" });
   } catch {
     runtime.child.kill("SIGTERM");
   }
@@ -164,7 +172,8 @@ async function stopPi(runtime) {
 
 async function killPi(runtime) {
   try {
-    execFileSync("docker", ["kill", "--signal", "KILL", runtime.containerName], { stdio: "ignore" });
+    if (localPi) runtime.child.kill("SIGKILL");
+    else execFileSync("docker", ["kill", "--signal", "KILL", runtime.containerName], { stdio: "ignore" });
   } catch (error) {
     const stderr = runtime.stderr.join("").slice(-2000);
     fail(`无法强杀 Pi 容器 ${runtime.containerName}：${error instanceof Error ? error.message : String(error)}${stderr ? `；stderr=${stderr}` : ""}`);
@@ -183,19 +192,50 @@ async function waitForMarker(marker, minimumLines) {
   return [];
 }
 
+async function runTurn(runtime, id) {
+  runtime.child.stdin.write(`${JSON.stringify({ type: "prompt", id, message: "deterministic lifecycle smoke", streamingBehavior: "steer" })}\n`);
+  let accepted = false;
+  let started = false;
+  let settled = false;
+  let text = false;
+  while (!accepted || !started || !settled) {
+    const record = await runtime.reader.next();
+    if (record.type === "response" && record.id === id) {
+      assert(record.success === true && record.data?.disposition === "started", `${id} 未启动`);
+      accepted = true;
+    }
+    if (record.type === "agent_start") started = true;
+    if (record.type === "message_end" && record.message?.role === "assistant") {
+      assert(record.message.stopReason === "stop", `${id} 模型回合失败`);
+      text ||= record.message.content.some((block) => block.text === "smoke completed");
+    }
+    if (record.type === "agent_settled") {
+      assert(record.aborted === false, `${id} 被中止`);
+      settled = true;
+    }
+  }
+  assert(text, `${id} 缺少模型回复`);
+}
+
 async function main() {
   try {
-    execFileSync("docker", ["image", "inspect", image], { stdio: "ignore" });
+    if (!localPi) execFileSync("docker", ["image", "inspect", image], { stdio: "ignore" });
   } catch {
     fail(`找不到镜像 ${image}；先构建并加载对应 runtime image`);
   }
   const root = mkdtempSync(path.join(os.tmpdir(), "deepsonar-pi-rpc-"));
   const paths = {
+    workspaceDir: path.join(root, "workspace"),
     agentDir: path.join(root, "agent"),
     governedDir: path.join(root, "governed"),
-    projectDir: path.join(root, "project"),
+    projectDir: path.join(root, "workspace", ".pi", "extensions"),
     markerDir: path.join(root, "markers"),
   };
+  if (localPi) {
+    SESSION_ROOT = paths.agentDir;
+    EXTENSION_PATH = path.join(paths.governedDir, "governed-lifecycle.mjs");
+  }
+  const markerRoot = localPi ? paths.markerDir : "/tmp/pi-smoke";
   mkdirSync(paths.agentDir, { recursive: true });
   mkdirSync(paths.governedDir, { recursive: true });
   mkdirSync(paths.projectDir, { recursive: true });
@@ -214,14 +254,29 @@ async function main() {
     retry: { enabled: false, maxRetries: 0, provider: { maxRetries: 0 } },
   }, null, 2)}\n`);
   writeFileSync(path.join(paths.governedDir, "governed-lifecycle.mjs"), `import fs from "node:fs";
+import { createAssistantMessageEventStream } from "@earendil-works/pi-ai/compat";
 export default function (pi) {
-  pi.on("session_start", () => fs.appendFileSync("/tmp/pi-smoke/governed-session-start", "started\\n"));
-  pi.on("agent_end", () => fs.appendFileSync("/tmp/pi-smoke/governed-agent-end", "ended\\n"));
+  pi.registerProvider("deepsonar-smoke", {
+    baseUrl: "http://127.0.0.1:1", apiKey: "offline-smoke-only", api: "smoke-local",
+    models: [{ id: "pi-rpc-smoke", name: "Smoke", reasoning: false, input: ["text"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 4096, maxTokens: 256 }],
+    streamSimple(model) {
+      const stream = createAssistantMessageEventStream();
+      const message = { role: "assistant", content: [{ type: "text", text: "smoke completed" }],
+        api: model.api, provider: model.provider, model: model.id, stopReason: "stop", timestamp: Date.now(),
+        usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
+      queueMicrotask(() => { stream.push({ type: "done", reason: "stop", message }); stream.end(); });
+      return stream;
+    },
+  });
+  pi.on("session_start", () => fs.appendFileSync(${JSON.stringify(`${markerRoot}/governed-session-start`)}, "started\\n"));
+  pi.on("agent_end", () => fs.appendFileSync(${JSON.stringify(`${markerRoot}/governed-agent-end`)}, "ended\\n"));
 }
 `);
   writeFileSync(path.join(paths.projectDir, "project-auto-load.mjs"), `import fs from "node:fs";
 export default function (pi) {
-  pi.on("session_start", () => fs.writeFileSync("/tmp/pi-smoke/project-auto-loaded", "unexpected"));
+  pi.on("session_start", () => fs.writeFileSync(${JSON.stringify(`${markerRoot}/project-auto-loaded`)}, "unexpected"));
 }
 `);
   let runtime;
@@ -238,19 +293,10 @@ export default function (pi) {
     assert(governedLines.length === 1, "显式受治理扩展未收到 session_start");
     assert(!existsSync(path.join(paths.markerDir, "project-auto-loaded")), "项目 .pi 扩展被自动加载");
 
-    runtime.child.stdin.write(`${JSON.stringify({ type: "prompt", id: "offline-turn", message: "offline lifecycle smoke" })}\n`);
-    let promptAccepted = false;
-    let agentEnded = false;
-    while (!promptAccepted || !agentEnded) {
-      const record = await runtime.reader.next();
-      if (record.type === "response" && record.command === "prompt") {
-        assert(record.success === true, "离线失败回合未被 RPC 接受");
-        promptAccepted = true;
-      }
-      if (record.type === "agent_end") agentEnded = true;
-    }
-    const agentEndLines = await waitForMarker(path.join(paths.markerDir, "governed-agent-end"), 1);
-    assert(agentEndLines.length === 1, "受治理扩展未收到 agent_end");
+    await runTurn(runtime, "initial-turn");
+    await runTurn(runtime, "idle-completion-nudge");
+    const agentEndLines = await waitForMarker(path.join(paths.markerDir, "governed-agent-end"), 2);
+    assert(agentEndLines.length === 2, "受治理扩展未收到 agent_end");
 
     runtime.child.stdin.write(`${JSON.stringify({ type: "set_model", id: "invalid-model", provider: "invalid-provider", modelId: "invalid-model" })}\n`);
     const rejected = await waitForResponse(runtime, "set_model");
@@ -265,10 +311,12 @@ export default function (pi) {
     runtime.child.stdin.write(`${JSON.stringify({ type: "get_state", id: "resume-state" })}\n`);
     const resumed = await waitForResponse(runtime, "get_state");
     assert(resumed.success === true && resumed.data.sessionFile === sessionFile, "重启恢复未使用精确 sessionFile");
+    assert(resumed.data.sessionId === firstState.sessionId, "恢复进程 sessionId 发生漂移");
+    await runTurn(runtime, "resumed-turn");
     const resumedLines = await waitForMarker(path.join(paths.markerDir, "governed-session-start"), 2);
     assert(resumedLines.length === 2, "恢复进程未再次加载受治理扩展生命周期");
     assert(!existsSync(path.join(paths.markerDir, "project-auto-loaded")), "恢复进程自动加载了项目 .pi 扩展");
-    console.log(`Pi RPC real Docker smoke passed: image=${image}, sessionFile=${sessionFile}`);
+    console.log(`Pi RPC real process smoke passed: runtime=${localPi ?? image}, sessionFile=${sessionFile}`);
   } finally {
     if (runtime) await stopPi(runtime);
     rmSync(root, { recursive: true, force: true });

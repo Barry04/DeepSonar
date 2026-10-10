@@ -4,6 +4,7 @@
  */
 import {
   evaluateVerificationStrategy,
+  isStructuredVerificationFact,
   strategyActionableMissing,
   profileRequiresEvidencePair,
   type FactFirstGateResult,
@@ -110,25 +111,46 @@ export function evaluateConfirmGate(
   evidence: ConfirmGateEvidence,
   opts?: ConfirmGateOptions,
 ): ConfirmGateResult {
-  const strategy = evaluateVerificationStrategy(factFirstRecordsFromSnapshot(evidence), {
+  const facts = factFirstRecordsFromSnapshot(evidence);
+  const eligible = (row: Record<string, unknown>) =>
+    (!opts?.findingId || row.finding_id === opts.findingId) &&
+    (!opts?.subjectRevision || row.subject_revision === opts.subjectRevision) &&
+    row.job_status === "succeeded" &&
+    isStructuredVerificationFact(row as FactFirstRecord) &&
+    (!opts?.originJobId || (row.source_job_id ?? row.job_id) !== opts.originJobId);
+  const review = evidence.review.filter(eligible);
+  const test = evidence.test.filter(eligible);
+  const requirePair = opts?.requireEvidencePair ?? profileRequiresEvidencePair(opts?.findingProfile);
+  const pairMissing = requirePair ? [
+    ...(review.length ? [] : ["independent_review"]),
+    ...(test.length ? [] : ["runtime_test"]),
+    ...(review.length && test.length && !review.some((r) => test.some((t) => r.job_id !== t.job_id)) ? ["independent_jobs"] : []),
+    ...(test.length && !test.some((row) => row.outcome === "supports") ? ["supporting_test"] : []),
+    ...([...review, ...test].some((row) => row.outcome === "refutes") ? ["unresolved_conflict"] : []),
+  ] : evidence.missing;
+  const strategy = evaluateVerificationStrategy(facts, {
     findingId: opts?.findingId ?? "",
     subjectRevision: opts?.subjectRevision,
     originJobId: opts?.originJobId,
-    pairMissing: evidence.missing,
+    pairMissing,
     conflictingNodeIds: evidence.conflicting_node_ids,
     findingProfile: opts?.findingProfile,
     requireEvidencePair: opts?.requireEvidencePair,
     declaredUsedFactIds: opts?.declaredUsedFactIds,
     factsById: opts?.factsById,
   });
+  const usedFactIds = new Set(strategy.used_fact_ids);
+  const usedRows = evidenceRows(evidence).filter((row) => usedFactIds.has(String(row.node_id ?? row.id ?? "")));
   const integrity = evaluateEvidenceIntegrityForConfirm(
-    factNodeSnapshotsFromEvidenceRows(evidenceRows(evidence)),
+    factNodeSnapshotsFromEvidenceRows(usedRows),
     {
       requireRuntimeProof: opts?.requireRuntimeProof === true,
       requireObservedDigests: opts?.requireObservedDigests === true,
     },
   );
   let merged = mergeStrategyWithEvidenceIntegrity(strategy, integrity);
+  // Corrupted evidence cannot justify a semantic terminal (including refuted).
+  if (!integrity.ok) merged = { ...merged, result: "insufficient" };
 
   let vulnAudit: ReturnType<typeof vulnProofAuditFields> | null = null;
   const profile = (opts?.findingProfile ?? "").trim();
@@ -151,13 +173,15 @@ export function evaluateConfirmGate(
       extra.push(...impactDecision.required_missing);
       reasons.push(...impactDecision.reasons);
     }
-    const attempted = (opts?.attemptedRefutation ?? []).map(String).map((s) => s.trim()).filter(Boolean);
+    const attempted = (opts?.attemptedRefutation ?? usedRows.filter(eligible).flatMap((row) =>
+      Array.isArray(row.attempted_refutation) ? row.attempted_refutation : [],
+    )).filter((value): value is string => typeof value === "string").map((s) => s.trim()).filter(Boolean);
     if (attempted.length === 0) {
       extra.push("attempted_refutation");
       reasons.push("confirmed 必须附带 attempted_refutation");
     }
     const used = new Set(merged.used_fact_ids);
-    const tests = evidence.test.filter((row) => used.has(String(row.node_id ?? "")));
+    const tests = test.filter((row) => used.has(String(row.node_id ?? "")));
     if (tests.some((row) => !Array.isArray(row.artifact_refs) || row.artifact_refs.length === 0)) {
       extra.push("qualified_test_artifact_refs");
       reasons.push("合格 test 缺少 artifact_refs");
@@ -166,6 +190,7 @@ export function evaluateConfirmGate(
       merged = {
         ...merged,
         ok: false,
+        result: merged.result === "passed" ? "insufficient" : merged.result,
         required_missing: [...new Set([...merged.required_missing, ...extra])],
         reasons: [...merged.reasons, ...reasons],
         confirm_reason: null,
@@ -173,6 +198,7 @@ export function evaluateConfirmGate(
     }
   }
 
+  if (!merged.ok && merged.result === "passed") merged = { ...merged, result: "insufficient" };
   return {
     ok: merged.ok,
     missing: merged.ok ? [] : strategyActionableMissing(merged),

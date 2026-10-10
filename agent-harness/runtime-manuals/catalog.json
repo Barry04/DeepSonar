@@ -532,7 +532,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "2.1.258",
+          "version": "2.1.296",
           "version_source": "agent-harness/runtime-images.json#npm.@anthropic-ai/claude-code",
           "commands": [
             "claude"
@@ -579,7 +579,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "0.85.1",
+          "version": "1.1.0",
           "version_source": "agent-harness/runtime-images.json#npm.@earendil-works/pi-coding-agent",
           "commands": [
             "pi"
@@ -1972,7 +1972,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "2.1.258",
+          "version": "2.1.296",
           "version_source": "agent-harness/runtime-images.json#npm.@anthropic-ai/claude-code",
           "commands": [
             "claude"
@@ -2019,7 +2019,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "0.85.1",
+          "version": "1.1.0",
           "version_source": "agent-harness/runtime-images.json#npm.@earendil-works/pi-coding-agent",
           "commands": [
             "pi"
@@ -3759,7 +3759,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "2.1.258",
+          "version": "2.1.296",
           "version_source": "agent-harness/kali-minimal-runtime.json#/npm.@anthropic-ai/claude-code",
           "commands": [
             "claude"
@@ -3803,7 +3803,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "0.85.1",
+          "version": "1.1.0",
           "version_source": "agent-harness/kali-minimal-runtime.json#/npm.@earendil-works/pi-coding-agent",
           "commands": [
             "pi"
@@ -5612,7 +5612,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "2.1.258",
+          "version": "2.1.296",
           "version_source": "agent-harness/runtime-images.json#npm.@anthropic-ai/claude-code",
           "commands": [
             "claude"
@@ -5659,7 +5659,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "0.85.1",
+          "version": "1.1.0",
           "version_source": "agent-harness/runtime-images.json#npm.@earendil-works/pi-coding-agent",
           "commands": [
             "pi"
@@ -7361,7 +7361,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "2.1.258",
+          "version": "2.1.296",
           "version_source": "agent-harness/runtime-images.json#npm.@anthropic-ai/claude-code",
           "commands": [
             "claude"
@@ -7408,7 +7408,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "0.85.1",
+          "version": "1.1.0",
           "version_source": "agent-harness/runtime-images.json#npm.@earendil-works/pi-coding-agent",
           "commands": [
             "pi"
@@ -9118,7 +9118,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "2.1.258",
+          "version": "2.1.296",
           "version_source": "agent-harness/runtime-images.json#npm.@anthropic-ai/claude-code",
           "commands": [
             "claude"
@@ -9165,7 +9165,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "0.85.1",
+          "version": "1.1.0",
           "version_source": "agent-harness/runtime-images.json#npm.@earendil-works/pi-coding-agent",
           "commands": [
             "pi"
@@ -11157,7 +11157,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "2.1.258",
+          "version": "2.1.296",
           "version_source": "agent-harness/runtime-images.json#npm.@anthropic-ai/claude-code",
           "commands": [
             "claude"
@@ -11204,7 +11204,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "0.85.1",
+          "version": "1.1.0",
           "version_source": "agent-harness/runtime-images.json#npm.@earendil-works/pi-coding-agent",
           "commands": [
             "pi"
@@ -12918,7 +12918,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "2.1.258",
+          "version": "2.1.296",
           "version_source": "agent-harness/runtime-images.json#npm.@anthropic-ai/claude-code",
           "commands": [
             "claude"
@@ -12965,7 +12965,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "0.85.1",
+          "version": "1.1.0",
           "version_source": "agent-harness/runtime-images.json#npm.@earendil-works/pi-coding-agent",
           "commands": [
             "pi"
@@ -14761,7 +14761,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "2.1.258",
+          "version": "2.1.296",
           "version_source": "agent-harness/runtime-images.json#npm.@anthropic-ai/claude-code",
           "commands": [
             "claude"
@@ -14808,7 +14808,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "0.85.1",
+          "version": "1.1.0",
           "version_source": "agent-harness/runtime-images.json#npm.@earendil-works/pi-coding-agent",
           "commands": [
             "pi"
@@ -16762,7 +16762,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "2.1.258",
+          "version": "2.1.296",
           "version_source": "agent-harness/runtime-images.json#npm.@anthropic-ai/claude-code",
           "commands": [
             "claude"
@@ -16809,7 +16809,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "0.85.1",
+          "version": "1.1.0",
           "version_source": "agent-harness/runtime-images.json#npm.@earendil-works/pi-coding-agent",
           "commands": [
             "pi"
@@ -18882,7 +18882,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "2.1.258",
+          "version": "2.1.296",
           "version_source": "agent-harness/runtime-images.json#npm.@anthropic-ai/claude-code",
           "commands": [
             "claude"
@@ -18929,7 +18929,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "0.85.1",
+          "version": "1.1.0",
           "version_source": "agent-harness/runtime-images.json#npm.@earendil-works/pi-coding-agent",
           "commands": [
             "pi"
@@ -21265,7 +21265,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "2.1.258",
+          "version": "2.1.296",
           "version_source": "agent-harness/runtime-images.json#npm.@anthropic-ai/claude-code",
           "commands": [
             "claude"
@@ -21312,7 +21312,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "0.85.1",
+          "version": "1.1.0",
           "version_source": "agent-harness/runtime-images.json#npm.@earendil-works/pi-coding-agent",
           "commands": [
             "pi"
@@ -23612,7 +23612,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "2.1.258",
+          "version": "2.1.296",
           "version_source": "agent-harness/runtime-images.json#npm.@anthropic-ai/claude-code",
           "commands": [
             "claude"
@@ -23659,7 +23659,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "0.85.1",
+          "version": "1.1.0",
           "version_source": "agent-harness/runtime-images.json#npm.@earendil-works/pi-coding-agent",
           "commands": [
             "pi"

@@ -7,6 +7,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseDeclaredQuantities, type QuantityAnchor } from "@deepsonar/shared-types";
 import { config } from "./config.js";
+import { taskReportCoverageOk } from "./report-coverage.js";
 import { sql } from "./db.js";
 import {
   fixedPriorityForJob,
@@ -644,6 +645,7 @@ function defaultMarkdown(input: ReportInput): string {
       lines.push("");
       for (const f of input.confirmed_findings.filter((finding) => finding.profile === profile)) {
         lines.push(`#### [${f.severity ?? "未评分"}] ${f.title}`);
+        lines.push(`- Finding ID：${f.id}`);
         lines.push("");
         if (f.category) lines.push(`- 分类：${f.category}`);
         if (f.scoring) lines.push(`- 评分：${String(f.scoring.standard)} ${String(f.scoring.version)} · ${String(f.scoring.base_score ?? "未计算")} · ${String(f.scoring.exploitability_label ?? "未知难度")}`);
@@ -666,6 +668,7 @@ function defaultMarkdown(input: ReportInput): string {
     lines.push("");
     for (const f of input.refuted_findings) {
       lines.push(`### [${f.severity ?? "未评分"}] ${f.title}`);
+      lines.push(`- Finding ID：${f.id}`);
       lines.push("");
       lines.push(`- Profile：${f.profile}`);
       if (f.location) lines.push(`- 位置：\`${f.location}\``);
@@ -684,6 +687,7 @@ function defaultMarkdown(input: ReportInput): string {
     lines.push("");
     for (const f of input.inconclusive_findings) {
       lines.push(`### [${f.severity ?? "未评分"}] ${f.title}`);
+      lines.push(`- Finding ID：${f.id}`);
       lines.push("");
       lines.push(`- Profile：${f.profile}`);
       if (f.location) lines.push(`- 位置：\`${f.location}\``);
@@ -700,6 +704,7 @@ function defaultMarkdown(input: ReportInput): string {
   } else {
     for (const f of input.needs_human_findings) {
       lines.push(`### [${f.severity ?? "未评分"}] ${f.title}`);
+      lines.push(`- Finding ID：${f.id}`);
       lines.push("");
       lines.push(`- Profile：${f.profile}`);
       if (f.scoring) lines.push(`- 评分：${String(f.scoring.standard)} ${String(f.scoring.version)} · ${String(f.scoring.base_score ?? "未计算")}`);
@@ -719,6 +724,7 @@ function defaultMarkdown(input: ReportInput): string {
     lines.push("");
     for (const f of input.excluded_findings) {
       lines.push(`### [${f.severity ?? "未评分"}] ${f.title}`);
+      lines.push(`- Finding ID：${f.id}`);
       lines.push("");
       lines.push(`- Profile：${f.profile}`);
       lines.push(`- 自动验证阈值：${f.verification_policy?.min_verify_severity ?? "未知"}`);
@@ -755,21 +761,6 @@ function defaultMarkdown(input: ReportInput): string {
 
 export type ReportMarkdownFallback = "coverage" | "numeric" | null;
 
-function taskReportCoverageOk(input: ReportInput, markdown: string): boolean {
-  return (
-    input.findings.length === 0 ||
-    input.findings.every(
-      (f) =>
-        markdown.includes(f.id) ||
-        markdown.includes(f.title) ||
-        (f.verify_status === "confirmed" && markdown.includes("已确认")) ||
-        (f.verify_status === "refuted" && markdown.includes("已排除")) ||
-        (f.verify_status === "inconclusive" && markdown.includes("未证实")) ||
-        (f.verify_status === "needs_human" && (markdown.includes("人工") || markdown.includes("待"))) ||
-        (f.verification_policy?.eligibility === "below_min_verify_severity" && markdown.includes("未自动验证")),
-    )
-  );
-}
 
 /**
  * Coverage/short Agent markdown falls back to the deterministic template.
