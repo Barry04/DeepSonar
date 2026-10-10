@@ -14,7 +14,12 @@ import {
   startRuntimeImageRegistrySync,
 } from "./runtime-images.js";
 import { useSqlRuntimeImagePullTaskStore } from "./runtime-image-pull-status.js";
-import { preheatManagedGateway } from "@deepsonar/runtime-sandbox";
+import {
+  GATEWAY_UPSTREAM_SOCKET_NAME,
+  gatewayUpstreamSocketFromEnv,
+  preheatManagedGateway,
+} from "@deepsonar/runtime-sandbox";
+import { relayTargetHost, startGatewayUpstreamSocket } from "./gateway-upstream-socket.js";
 import { startRuntimeImageWarmupOnBoot } from "./runtime-image-warmup.js";
 import { startSkillSourceBootSync } from "./skill-sources.js";
 import { dispatcherRuntimeStatus, markDispatcherEnabled } from "./startup-status.js";
@@ -98,6 +103,7 @@ async function main() {
 
   let stopDispatcher = () => {};
   let stopRuntimeImageWarmup = () => {};
+  let stopGatewayUpstreamSocket: () => Promise<void> = async () => {};
   const stopReaper = startReaper();
   const stopTransfer = startTransferWorker();
   const stopRuntimeImageRegistrySync = startRuntimeImageRegistrySync();
@@ -111,6 +117,7 @@ async function main() {
   const shutdown = async () => {
     stopDispatcher();
     markDispatcherEnabled(false);
+    await stopGatewayUpstreamSocket().catch(() => {});
     stopRuntimeImageWarmup();
     stopReaper();
     stopTransfer();
@@ -129,6 +136,23 @@ async function main() {
 
   await app.listen({ port: config.port, host: config.host });
   console.log(`[boot] scheduler 已启动: http://${config.host}:${config.port}`);
+  // #685: bridge deploys keep Scheduler off sandbox networks; the managed proxy
+  // reaches it through this socket on a shared volume instead of DNS.
+  try {
+    const upstreamSocket = gatewayUpstreamSocketFromEnv();
+    if (upstreamSocket) {
+      const relay = await startGatewayUpstreamSocket({
+        dir: upstreamSocket.dir,
+        socketName: GATEWAY_UPSTREAM_SOCKET_NAME,
+        targetHost: relayTargetHost(config.host),
+        targetPort: config.port,
+      });
+      stopGatewayUpstreamSocket = relay.close;
+      console.log(`[gateway-upstream] proxy upstream socket ready: ${relay.path} (volume ${upstreamSocket.volume})`);
+    }
+  } catch (error) {
+    console.error("[gateway-upstream] 无法创建 proxy 上游 socket，沙箱 Gateway/Control API 将不可达:", error);
+  }
   stopRuntimeImageWarmup = startRuntimeImageWarmupOnBoot(() => {
     stopDispatcher = startDispatcher();
     markDispatcherEnabled(true);

@@ -113,9 +113,13 @@ services:
       BLOB_S3_CACHE_DIR: /app/data/blobs
       # 必须落在 blob_data volume 内。默认相对 cwd 会写成 /app/apps/scheduler/data（容器可写层，重建即丢）。
       BLOB_DIR: /app/data/blobs
-      # real mode: sandboxes call the managed proxy; the proxy reaches Scheduler on the shared bridge.
+      # real mode: sandboxes call the managed proxy; the proxy reaches Scheduler through
+      # the Unix socket on the gateway_upstream volume (#685), never via DNS. The URL
+      # host below is only the Host header / path prefix; it is not resolved.
       DEEPSONAR_GATEWAY_SANDBOX_URL: ${DEEPSONAR_GATEWAY_SANDBOX_URL:-http://deepsonar-gateway-proxy:3100/gateway}
       DEEPSONAR_GATEWAY_PROXY_UPSTREAM_URL: ${DEEPSONAR_GATEWAY_PROXY_UPSTREAM_URL:-http://scheduler:3100/gateway}
+      DEEPSONAR_GATEWAY_UPSTREAM_SOCKET_VOLUME: ${DEEPSONAR_GATEWAY_UPSTREAM_SOCKET_VOLUME:-deepsonar-gateway-upstream}
+      DEEPSONAR_GATEWAY_UPSTREAM_SOCKET_DIR: /run/deepsonar-gateway
       # vfs/rootless cold create can take 4-8 minutes; keep the runtime timeout explicit.
       PROVISION_TIMEOUT_SEC: ${PROVISION_TIMEOUT_SEC:-900}
       # /health.version：显式传入镜像标签；可用 DEEPSONAR_VERSION 覆盖。
@@ -128,6 +132,7 @@ services:
     volumes:
       - blob_data:/app/data
       - ./master.key:/run/secrets/deepsonar_master_key:ro
+      - gateway_upstream:/run/deepsonar-gateway
     depends_on:
       postgres:
         condition: service_healthy
@@ -141,12 +146,12 @@ services:
       timeout: 5s
       retries: 20
     logging: *default-logging
-    # Dual-homed on purpose (#685): deepsonar-gateway-proxy is created only on
-    # sandbox_gateway and upstreams to http://scheduler:3100/gateway, so scheduler
-    # must share that bridge for L3+DNS. Do NOT drop sandbox_gateway here without
-    # teaching the proxy another reachability path. opensandbox also joins
-    # sandbox_gateway (opensandbox.prod.yml) so both aardvark NS resolve it.
-    networks: [deepsonar, sandbox_gateway]
+    # Business network only (#685). Every name Scheduler resolves (postgres, silo,
+    # opensandbox) lives on this single network, so there is exactly one DNS view.
+    # Sandboxes never reach Scheduler directly: the managed deepsonar-gateway-proxy
+    # sits on the sandbox side and forwards /gateway + /control/v1 over the
+    # gateway_upstream socket. packages/runtime-sandbox/src/compose-network-topology.test.ts enforces this.
+    networks: [deepsonar]
 
   # 第三方镜像只在独立准入 Worker 中执行自检；Scheduler 只管理状态与审批。
   image-admission:
@@ -192,12 +197,13 @@ volumes:
   backup_data:
   admission_scan:
     name: deepsonar_admission_scan
+  # Fixed name: Scheduler mounts it here and the managed proxy mounts it read-only
+  # by the same name through the container runtime (#685).
+  gateway_upstream:
+    name: ${DEEPSONAR_GATEWAY_UPSTREAM_SOCKET_VOLUME:-deepsonar-gateway-upstream}
 
+# deepsonar-sandbox-gateway / deepsonar-restricted are created by Scheduler for
+# the managed proxy and sandboxes; no compose service joins them (#685).
 networks:
   deepsonar:
     driver: bridge
-  sandbox_gateway:
-    name: deepsonar-sandbox-gateway
-    driver: bridge
-    labels:
-      deepsonar.managed: "true"

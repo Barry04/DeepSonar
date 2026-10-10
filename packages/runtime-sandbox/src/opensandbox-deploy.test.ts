@@ -101,11 +101,14 @@ test("OpenSandbox production overlay is the default real deploy path", () => {
   assert.match(overlay, /condition: service_healthy/);
   assert.match(overlay, /127\.0\.0\.1:8080\/health/);
   assert.match(overlay, /OPENSANDBOX_SERVER_API_KEY/);
-  // #685: opensandbox must also sit on sandbox_gateway while scheduler stays dual-homed
-  // for deepsonar-gateway-proxy upstream DNS/L3; otherwise sandbox_gateway aardvark ENOTFOUND.
-  assert.match(overlay, /sandbox_gateway/);
+  // #685: business network only; the managed proxy reaches Scheduler over the
+  // gateway_upstream socket volume. Full topology lint: compose-network-topology.test.ts.
+  assert.match(overlay, /networks: \[deepsonar\]/);
+  assert.doesNotMatch(overlay, /sandbox_gateway/);
   const prodCompose = readFileSync(join(root, "deploy/docker-compose.prod.yml"), "utf8");
-  assert.match(prodCompose, /networks: \[deepsonar, sandbox_gateway\]/);
+  assert.match(prodCompose, /networks: \[deepsonar\]\n/);
+  assert.doesNotMatch(prodCompose, /sandbox_gateway/);
+  assert.match(prodCompose, /DEEPSONAR_GATEWAY_UPSTREAM_SOCKET_VOLUME/);
   assert.match(prodCompose, /#685/);
   assert.doesNotMatch(overlay, /:latest|network_mode:\s*host/);
   assert.doesNotMatch(overlay, /127\.0\.0\.1:8080:8080/);
@@ -135,8 +138,8 @@ test("OpenSandbox production overlay is the default real deploy path", () => {
     assert.match(pkg, new RegExp(`${script}": ".*${smokeBuildPrefix.source}`));
   }
   const isolate = readFileSync(join(root, "deploy/docker-compose.opensandbox.prod-isolated.yml"), "utf8");
-  assert.match(isolate, /name: \$\{OPEN_SANDBOX_POC_GATEWAY_NET:-os-poc-sandbox-gateway\}/);
-  assert.doesNotMatch(isolate, /^\s+name:\s*deepsonar-sandbox-gateway/m);
+  assert.match(isolate, /name: \$\{OPEN_SANDBOX_POC_GATEWAY_UPSTREAM_VOL:-os-poc-gateway-upstream\}/);
+  assert.doesNotMatch(isolate, /deepsonar-gateway-upstream/);
   const hostOverlay = readFileSync(join(root, "deploy/docker-compose.opensandbox.host.yml"), "utf8");
   assert.match(hostOverlay, /SANDBOX_PROVIDER: opensandbox/);
   assert.match(hostOverlay, /DEEPSONAR_GATEWAY_PROXY_UPSTREAM_URL: \$\{DEEPSONAR_GATEWAY_PROXY_UPSTREAM_URL:-http:\/\/host\.docker\.internal:\$\{SCHEDULER_HOST_PORT:-13100\}\/gateway\}/);

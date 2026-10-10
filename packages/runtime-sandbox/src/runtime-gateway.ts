@@ -35,7 +35,10 @@ const https = require("node:https");
 const upstream = new URL(process.env.DEEPSONAR_GATEWAY_UPSTREAM);
 const prefix = upstream.pathname.replace(/\/$/, "");
 const controlPrefix = "/control/v1";
-const client = upstream.protocol === "https:" ? https : http;
+// Unix socket upstream (#685): no DNS lookup, so multi-homed nameserver races
+// cannot misroute or fail the Scheduler hop.
+const socketPath = process.env.DEEPSONAR_GATEWAY_UPSTREAM_SOCKET || "";
+const client = socketPath ? http : upstream.protocol === "https:" ? https : http;
 const server = http.createServer((req, res) => {
   const incoming = new URL(req.url || "/", "http://proxy.local");
   if (incoming.pathname === "/_deepsonar_health") {
@@ -61,10 +64,15 @@ const server = http.createServer((req, res) => {
     }
     res.writeHead(502).end("gateway unavailable");
   };
+  const destination = socketPath
+    ? { socketPath }
+    : {
+      protocol: upstream.protocol,
+      hostname: upstream.hostname,
+      port: upstream.port || (upstream.protocol === "https:" ? 443 : 80),
+    };
   const target = client.request({
-    protocol: upstream.protocol,
-    hostname: upstream.hostname,
-    port: upstream.port || (upstream.protocol === "https:" ? 443 : 80),
+    ...destination,
     method: req.method,
     path: incoming.pathname + incoming.search,
     headers,
@@ -92,6 +100,49 @@ export const GATEWAY_PROXY_REVISION = createHash("sha256")
   .slice(0, 16);
 
 export const DEFAULT_GATEWAY_CREATE_TIMEOUT_MS = 600_000;
+
+/** Socket file name inside the shared upstream volume (#685). */
+export const GATEWAY_UPSTREAM_SOCKET_NAME = "scheduler.sock";
+/** Mount point of the upstream volume in both Scheduler and the managed proxy. */
+export const DEFAULT_GATEWAY_UPSTREAM_SOCKET_DIR = "/run/deepsonar-gateway";
+
+/**
+ * Bridge deployments keep Scheduler on the business network only (#685). The
+ * managed proxy reaches it through a Unix socket on a shared named volume
+ * instead of a service name, so no DNS answer from any sandbox-side network
+ * can decide where the Gateway hop lands.
+ */
+export type GatewayUpstreamSocket = {
+  /** Docker/Podman named volume shared by Scheduler and the proxy. */
+  volume: string;
+  /** Absolute mount directory (same path in both containers). */
+  dir: string;
+};
+
+export function gatewayUpstreamSocketPath(socket: GatewayUpstreamSocket): string {
+  return `${socket.dir}/${GATEWAY_UPSTREAM_SOCKET_NAME}`;
+}
+
+/** Read the socket upstream from env; unset volume keeps the URL upstream (host mode). */
+export function gatewayUpstreamSocketFromEnv(env: NodeJS.ProcessEnv = process.env): GatewayUpstreamSocket | null {
+  const volume = env.DEEPSONAR_GATEWAY_UPSTREAM_SOCKET_VOLUME?.trim() ?? "";
+  if (!volume) return null;
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(volume)) {
+    throw new Error(`DEEPSONAR_GATEWAY_UPSTREAM_SOCKET_VOLUME 不是合法卷名: ${volume}`);
+  }
+  const rawDir = env.DEEPSONAR_GATEWAY_UPSTREAM_SOCKET_DIR?.trim() || DEFAULT_GATEWAY_UPSTREAM_SOCKET_DIR;
+  const dir = rawDir.replace(/\/+$/, "");
+  if (!/^\/[A-Za-z0-9_./-]+$/.test(dir) || dir.split("/").includes("..")) {
+    throw new Error(`DEEPSONAR_GATEWAY_UPSTREAM_SOCKET_DIR 必须是绝对路径: ${rawDir}`);
+  }
+  return { volume, dir };
+}
+
+/** Label hash; URL-only upstreams keep the pre-#685 value so they are not churned. */
+export function gatewayUpstreamHash(upstreamUrl: string, socket: GatewayUpstreamSocket | null): string {
+  const material = socket ? `${upstreamUrl}\0unix:${socket.volume}:${socket.dir}` : upstreamUrl;
+  return createHash("sha256").update(material).digest("hex").slice(0, 16);
+}
 
 export function gatewayCreateTimeoutMs(
   env: NodeJS.ProcessEnv = process.env,
@@ -287,9 +338,10 @@ export async function cleanupUnhealthyManagedGateway(input: { expectedCreateOwne
 export async function ensureGatewayProxy(
   upstreamUrl: string,
   image: string,
-  options: { createTimeoutMs?: number; signal?: AbortSignal } = {},
+  options: { createTimeoutMs?: number; signal?: AbortSignal; upstreamSocket?: GatewayUpstreamSocket | null } = {},
 ): Promise<{ gatewayIp: string; restrictedIp: string; createOwner: string | null }> {
   const run = async () => {
+    const upstreamSocket = options.upstreamSocket === undefined ? gatewayUpstreamSocketFromEnv() : options.upstreamSocket;
     await ensureGatewayNetwork();
     await ensureRestrictedNetwork();
     const parsed = new URL(upstreamUrl);
@@ -299,7 +351,10 @@ export async function ensureGatewayProxy(
     if (!parsed.pathname.startsWith("/gateway")) {
       throw new Error("Gateway sidecar 上游 URL 必须以 /gateway 为路径");
     }
-    const upstreamHash = createHash("sha256").update(upstreamUrl).digest("hex").slice(0, 16);
+    if (upstreamSocket && parsed.protocol !== "http:") {
+      throw new Error("Gateway sidecar 的 Unix socket 上游只支持 http:");
+    }
+    const upstreamHash = gatewayUpstreamHash(upstreamUrl, upstreamSocket);
     const inspected = await inspectGatewayProxy();
     let exists = inspected.exists;
     let containerId = inspected.id;
@@ -332,6 +387,13 @@ export async function ensureGatewayProxy(
           "--label", `deepsonar.gateway-revision=${GATEWAY_PROXY_REVISION}`,
           "--label", `deepsonar.gateway-create-owner=${createOwner}`,
           "-e", `DEEPSONAR_GATEWAY_UPSTREAM=${upstreamUrl}`,
+          // Read-only: the proxy only connects; it can never replace Scheduler's socket.
+          ...(upstreamSocket
+            ? [
+              "-v", `${upstreamSocket.volume}:${upstreamSocket.dir}:ro`,
+              "-e", `DEEPSONAR_GATEWAY_UPSTREAM_SOCKET=${gatewayUpstreamSocketPath(upstreamSocket)}`,
+            ]
+            : []),
           "--entrypoint", "node", image, "-e", GATEWAY_PROXY_SCRIPT,
         ], options.signal);
       } catch (error) {

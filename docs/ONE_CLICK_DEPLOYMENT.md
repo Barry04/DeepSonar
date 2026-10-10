@@ -156,6 +156,28 @@ Provision 并发是数据库 claim admission，不是进程内 semaphore：超�
 `docker run`，也不应把 upstream 改为无路径的 Scheduler 根 URL。受管代理只暴露 `/gateway` 与
 `/control/v1`；代理脚本或 upstream 指纹变化时会在下一次 provision 前自动重建。
 
+#### 网络拓扑与服务发现（#685）
+
+rootless Podman 下容器每多挂一张启用 DNS 的网，`/etc/resolv.conf` 就多一个 aardvark nameserver；
+musl 会并行查询全部 nameserver，只要某个名字不在其中一张网上，就会间歇 `ENOTFOUND`。调整
+nameserver 顺序不能根治，健康探测的有界重试只作瞬态保护。因此拓扑约定为「每个容器只有一个 DNS 视图」：
+
+| 部署模式 | Scheduler / DB / S3 / OpenSandbox 管理端 | 沙箱 → Gateway / Control API |
+| --- | --- | --- |
+| bridge（`docker-compose.prod.yml` + `docker-compose.opensandbox.prod.yml`，`up real` 默认） | 全部只挂业务网 `deepsonar`，按服务名互相解析；DB / 对象存储从不接沙箱网 | 沙箱只解析 `deepsonar-gateway-proxy`（provision 时写入沙箱 `/etc/hosts`）。代理只挂沙箱侧网络（`deepsonar-sandbox-gateway` / `deepsonar-restricted` / 沙箱所在网），经命名卷 `deepsonar-gateway-upstream` 上的 Unix socket（`/run/deepsonar-gateway/scheduler.sock`，代理侧只读挂载）回连 Scheduler，**不做任何 DNS 解析** |
+| host（`docker-compose.opensandbox.host.yml`） | `network_mode: host`，DB / S3 / OpenSandbox 走回环端口 | 代理上游为 `http://host.docker.internal:<SCHEDULER_HOST_PORT>/gateway`，名字由 `--add-host host.docker.internal:host-gateway` 写入代理 `/etc/hosts`，同样不依赖任何网络的 DNS |
+
+- bridge 模式由 Scheduler 在启动时创建 socket（容器重建后自动清理旧 socket 文件并重新监听），代理每个请求现连，
+  Scheduler / 代理任一重建或 IP 变化都无需改配置；Scheduler 不可达时代理返回 `502`，不会回退到其它路由。
+- 代理仍只放行 `/gateway` 与 `/control/v1`（Job token 鉴权不变），管理 API、任意路径与 `CONNECT` 一律拒绝；
+  代理不在业务网上，沙箱无法经它触达 PostgreSQL / Silo。
+- `DEEPSONAR_GATEWAY_UPSTREAM_SOCKET_VOLUME` 同时决定 compose 卷名与代理挂载的卷名，必须一致；冒烟用的
+  `docker-compose.opensandbox.prod-isolated.yml` 改用独立卷，避免劫持生产 socket。
+- 部署自检：`packages/runtime-sandbox/src/compose-network-topology.test.ts`（挂在 `pnpm ci:unit:runtime-sandbox`）
+  渲染官方 compose 组合，校验多网容器解析的每个服务名都挂在它的全部网络上、Scheduler 只挂业务网、数据服务不接沙箱网。
+- 从旧版本升级：`deploy.sh up real pull` 会把 Scheduler 与 `opensandbox` 从 `deepsonar-sandbox-gateway` 摘下，
+  旧代理因 upstream 指纹变化在下一次 provision 前自动重建。手工维护的 compose 覆盖若仍给 Scheduler 加挂沙箱网，请删除。
+
 ### 4.2 Image Admission 扫描器镜像
 
 `image-admission` 启动时要求四个扫描器镜像都是不可变 `@sha256:<64 hex>` digest，环境变量为：

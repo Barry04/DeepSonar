@@ -10,6 +10,7 @@
 
 ### 修复
 
+- 网络拓扑消除服务发现歧义（#685 方案 4）：bridge 部署下 Scheduler 只挂业务网 `deepsonar`，`opensandbox` 撤回 #687 的沙箱网双挂；受管 `deepsonar-gateway-proxy` 改经命名卷 `deepsonar-gateway-upstream` 上的 Unix socket 回连 Scheduler，不再解析 `scheduler` 服务名，Podman 多 aardvark nameserver / musl 并行查询不再能让 Gateway 或 OpenSandbox / PostgreSQL / Silo 间歇 `ENOTFOUND`。代理路径白名单（`/gateway`、`/control/v1`）、Job token 鉴权与拒绝管理 API / CONNECT 不变，且代理不在业务网上。host 部署保持经 `host.docker.internal`（`/etc/hosts`）回连。新增 compose 拓扑自检 `compose-network-topology.test.ts`；健康探测有界重试仅保留为瞬态保护。
 - Provider 账号 CLI 归属贯通到候选解析层（#707 Phase 1 / 方案 A）：`resolve-credential` 删除软回退与 `default_credential_id` 侧路；CLI 不匹配返回 `provider_credential_cli_mismatch`（`permanent_failure`）；协议不兼容返回 `provider_credential_protocol_incompatible`（`model_correctable`）。凭据 create/PATCH 拒绝空 `agent_cli`（`CREDENTIAL_CLI_REQUIRED`）；在跑 Job 持有账号时禁止改 `agent_cli`/`provider`（`CREDENTIAL_IN_USE_BY_RUNNING_JOBS`）。
 
 ## [0.4.11] - 2026-09-24
