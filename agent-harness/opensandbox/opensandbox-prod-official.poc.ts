@@ -93,7 +93,7 @@ writeFileSync(envFile, [
   "BLOB_S3_ACCESS_KEY_ID=pocsilo",
   "BLOB_S3_SECRET_ACCESS_KEY=pocsilo-secret",
   "BLOB_S3_BUCKET=deepsonar",
-  `OPEN_SANDBOX_POC_GATEWAY_NET=${projectName}-gateway`,
+  `OPEN_SANDBOX_POC_GATEWAY_UPSTREAM_VOL=${projectName}-gateway-upstream`,
   `OPEN_SANDBOX_POC_ADMISSION_VOL=${projectName}-admission`,
   "",
 ].join("\n"), { mode: 0o600 });

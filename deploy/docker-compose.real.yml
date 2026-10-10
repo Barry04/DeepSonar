@@ -7,7 +7,8 @@ services:
       AGENT_MODE: real
       SANDBOX_PROVIDER: ${SANDBOX_PROVIDER:-opensandbox}
       BLOB_DIR: /app/data/blobs
-      # Sandboxes call the managed proxy; the proxy reaches Scheduler on the shared bridge.
+      # Sandboxes call the managed proxy; the proxy reaches Scheduler over the
+      # gateway_upstream Unix socket declared in docker-compose.prod.yml (#685).
       DEEPSONAR_GATEWAY_SANDBOX_URL: ${DEEPSONAR_GATEWAY_SANDBOX_URL:-http://deepsonar-gateway-proxy:3100/gateway}
       DEEPSONAR_GATEWAY_PROXY_UPSTREAM_URL: ${DEEPSONAR_GATEWAY_PROXY_UPSTREAM_URL:-http://scheduler:3100/gateway}
       # Read-only bind of the host Docker data filesystem; statfs only, never file traversal/deletion.
@@ -15,6 +16,7 @@ services:
     volumes:
       - blob_data:/app/data
       - ./master.key:/run/secrets/deepsonar_master_key:ro
+      - gateway_upstream:/run/deepsonar-gateway
       - ${DEEPSONAR_DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
       - ${DEEPSONAR_HOST_DISK_SOURCE:-/var/lib/docker}:/host-disk:ro
   image-admission:
