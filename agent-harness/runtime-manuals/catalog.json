@@ -356,7 +356,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "5.4.1-1",
+          "version": "5.4.1-1+deb12u2",
           "version_source": "agent-harness/runtime-images.json#apt.xz-utils",
           "commands": [
             "xz",
@@ -1796,7 +1796,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "5.4.1-1",
+          "version": "5.4.1-1+deb12u2",
           "version_source": "agent-harness/runtime-images.json#apt.xz-utils",
           "commands": [
             "xz",
@@ -5436,7 +5436,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "5.4.1-1",
+          "version": "5.4.1-1+deb12u2",
           "version_source": "agent-harness/runtime-images.json#apt.xz-utils",
           "commands": [
             "xz",
@@ -7185,7 +7185,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "5.4.1-1",
+          "version": "5.4.1-1+deb12u2",
           "version_source": "agent-harness/runtime-images.json#apt.xz-utils",
           "commands": [
             "xz",
@@ -8942,7 +8942,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "5.4.1-1",
+          "version": "5.4.1-1+deb12u2",
           "version_source": "agent-harness/runtime-images.json#apt.xz-utils",
           "commands": [
             "xz",
@@ -10981,7 +10981,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "5.4.1-1",
+          "version": "5.4.1-1+deb12u2",
           "version_source": "agent-harness/runtime-images.json#apt.xz-utils",
           "commands": [
             "xz",
@@ -12742,7 +12742,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "5.4.1-1",
+          "version": "5.4.1-1+deb12u2",
           "version_source": "agent-harness/runtime-images.json#apt.xz-utils",
           "commands": [
             "xz",
@@ -14585,7 +14585,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "5.4.1-1",
+          "version": "5.4.1-1+deb12u2",
           "version_source": "agent-harness/runtime-images.json#apt.xz-utils",
           "commands": [
             "xz",
@@ -16586,7 +16586,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "5.4.1-1",
+          "version": "5.4.1-1+deb12u2",
           "version_source": "agent-harness/runtime-images.json#apt.xz-utils",
           "commands": [
             "xz",
@@ -18706,7 +18706,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "5.4.1-1",
+          "version": "5.4.1-1+deb12u2",
           "version_source": "agent-harness/runtime-images.json#apt.xz-utils",
           "commands": [
             "xz",
@@ -21089,7 +21089,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "5.4.1-1",
+          "version": "5.4.1-1+deb12u2",
           "version_source": "agent-harness/runtime-images.json#apt.xz-utils",
           "commands": [
             "xz",
@@ -23436,7 +23436,7 @@
           "kind": "tool",
           "agent_visible": true,
           "implementation_only": false,
-          "version": "5.4.1-1",
+          "version": "5.4.1-1+deb12u2",
           "version_source": "agent-harness/runtime-images.json#apt.xz-utils",
           "commands": [
             "xz",

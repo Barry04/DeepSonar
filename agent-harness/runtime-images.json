@@ -11,7 +11,7 @@
     "jq": { "version": "1.6-2.1+deb12u2", "license": "MIT", "capabilities": ["json"] },
     "file": { "version": "1:5.44-3", "license": "BSD-2-Clause", "capabilities": ["file-identification"] },
     "unzip": { "version": "6.0-28", "license": "Info-ZIP", "capabilities": ["archive"] },
-    "xz-utils": { "version": "5.4.1-1", "license": "0BSD AND LGPL-2.1-or-later AND GPL-2.0-or-later", "capabilities": ["archive"] },
+    "xz-utils": { "version": "5.4.1-1+deb12u2", "license": "0BSD AND LGPL-2.1-or-later AND GPL-2.0-or-later", "capabilities": ["archive"] },
     "binutils": { "version": "2.40-2", "license": "GPL-3.0-or-later", "capabilities": ["binary-analysis"], "toolsets": ["audit"] }
   },
   "npm": {
