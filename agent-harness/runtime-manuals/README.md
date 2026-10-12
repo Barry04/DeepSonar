@@ -1,6 +1,6 @@
 # Runtime manual catalog
 
-`catalog.json` is the canonical, machine-readable source for the offline tool manuals required by the 13 official runtime images. It is deliberately expanded: every image contains its own complete `entries` array, including tools inherited from `deepsonar-base`. Consumers must not resolve an image entry through a base-image reference.
+`catalog.json` is the canonical, machine-readable source for the offline tool manuals required by the 14 official runtime images. It is deliberately expanded: every image contains its own complete `entries` array, including tools inherited from `deepsonar-base`. Consumers must not resolve an image entry through a base-image reference.
 
 ## Delivery contract
 
