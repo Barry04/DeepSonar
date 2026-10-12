@@ -992,6 +992,24 @@ expect(registryScript.includes("image build unchanged; version kept"), "generato
 expect(registryScript.includes("platform_version") && registryScript.includes("min_runtime_image"), "generator must emit split platform/runtime version axes");
 expect(releaseWorkflow.includes("maybe-skip-runtime-version-tags.sh"), "unchanged runtime products must skip new platform-version tags");
 expect(releaseWorkflow.includes("write-release-runtime-descriptor.sh"), "unchanged runtime products must reuse the previous catalog descriptor");
+const kaliReleaseBlock = releaseWorkflow.slice(
+  releaseWorkflow.indexOf("  kali-minimal:"),
+  releaseWorkflow.indexOf("  openharmony-test:"),
+);
+const kaliCacheGateIndex = kaliReleaseBlock.indexOf("if bash agent-harness/maybe-skip-runtime-version-tags.sh; then exit 0; fi");
+const kaliPublishIndex = kaliReleaseBlock.indexOf("source_refs=(");
+expect(
+  kaliCacheGateIndex >= 0
+    && kaliPublishIndex > kaliCacheGateIndex
+    && kaliReleaseBlock.includes("SOURCE_DIGEST: ${{ steps.resolve.outputs.digest }}")
+    && kaliReleaseBlock.includes('source_refs=("${IMAGE_NAME}@${SOURCE_DIGEST}")')
+    && kaliReleaseBlock.includes('"${IMAGE_NAME}@${AMD64_DIGEST}"')
+    && kaliReleaseBlock.includes('"${IMAGE_NAME}@${ARM64_DIGEST}"')
+    && kaliReleaseBlock.includes('if [[ "$SKIP" != "true" ]]')
+    && kaliReleaseBlock.includes('DIGEST="$digest" bash agent-harness/resolve-image-src-cache.sh pin')
+    && !kaliReleaseBlock.slice(kaliCacheGateIndex).includes('echo "image build unchanged; version kept" >> "$GITHUB_STEP_SUMMARY"'),
+  "Kali cache hits must prove catalog reuse before deciding whether to publish version tags",
+);
 expect(
   writeReleaseDescriptor.includes("reuse-catalog-descriptor.mjs")
     && writeReleaseDescriptor.includes("record-runtime-image-digest.mjs")

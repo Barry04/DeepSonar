@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+## [0.5.3] - 2026-10-12
+
+### 修复
+
+- 修复 Kali 运行时镜像命中内容缓存、但旧 catalog 尚无该 digest 时错误跳过版本 tag 的问题（#716）：catalog 命中继续复用版本行；仅缓存命中时改用 src-cache digest 发布各配置 registry 的版本 tag，并通过真实 inspect 记录 canonical digest；缓存命中路径不重新 pin src-cache，配置的 registry channel 发布或校验失败仍 fail closed。
+
+### 部署 / 升级说明
+
+- 本版不修改数据库 schema，保持 schema v56，无需数据库重建。
+
 ## [0.5.2] - 2026-10-12
 
 ### 修复
@@ -1082,6 +1092,7 @@
 
 - The bundled runtime registry was synchronized for the `v0.1.18` release.
 
+[0.5.3]: https://github.com/SummerSec/DeepSonar/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/SummerSec/DeepSonar/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/SummerSec/DeepSonar/compare/v0.4.11...v0.5.1
 [0.4.11]: https://github.com/SummerSec/DeepSonar/compare/v0.4.10...v0.4.11
