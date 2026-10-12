@@ -21,6 +21,7 @@ test("Hub catalog capability fields cover official specialty keys Hub must match
     "deepsonar-clickhouse-fuzz",
     "deepsonar-openharmony-test",
     "deepsonar-mobile",
+    "deepsonar-reverse",
   ]) {
     assert.ok(keys.includes(key), key);
     const cap = hubRuntimeImageCapability(key);
@@ -31,6 +32,8 @@ test("Hub catalog capability fields cover official specialty keys Hub must match
     assert.ok(cap.capabilities.length > 0, key);
   }
   assert.match(hubRuntimeImageCapability("deepsonar-mobile").selection_hints.join(" "), /APK/);
+  assert.match(hubRuntimeImageCapability("deepsonar-reverse").selection_hints.join(" "), /REA|Ghidra|deepsonar-reverse/);
+  assert.ok(hubRuntimeImageCapability("deepsonar-reverse").capabilities.includes("binary.rea.cli"));
   assert.match(hubRuntimeImageCapability("deepsonar-chrome-test").selection_hints.join(" "), /CDP|Chromium/);
   assert.ok(hubRuntimeImageCapability("deepsonar-chrome-audit").capabilities.includes("language-server.clangd"));
   assert.ok(hubRuntimeImageCapability("deepsonar-clickhouse-audit").capabilities.includes("language-server.clangd"));

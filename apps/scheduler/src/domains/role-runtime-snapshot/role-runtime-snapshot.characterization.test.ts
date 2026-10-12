@@ -89,6 +89,7 @@ test("specialty image boundary injects for any role; chrome/clickhouse peer mobi
     "deepsonar-openharmony-audit",
     "deepsonar-openharmony-fuzz",
     "deepsonar-mobile",
+    "deepsonar-reverse",
   ]) {
     const policy = withRuntimeTestToolchainPolicy("code", null, imageKey) ?? "";
     assert.match(policy, /\/opt\/deepsonar\/manuals\/index\.json/);
@@ -105,6 +106,7 @@ test("specialty image boundary injects for any role; chrome/clickhouse peer mobi
     "deepsonar-clickhouse-fuzz",
     "deepsonar-openharmony-test",
     "deepsonar-mobile",
+    "deepsonar-reverse",
   ]) {
     assert.ok(keys.includes(key), `missing specialty policy for ${key}`);
     assert.ok(specialtyPolicyForImageKey(key)?.body.includes("role-scoped runtime evidence policy"));
@@ -120,6 +122,7 @@ test("角色×镜像矩阵文档与默认 Role 镜像、专项 policy 对齐", (
   assert.match(matrix, /deepsonar-chrome-test/);
   assert.match(matrix, /deepsonar-clickhouse-test/);
   assert.match(matrix, /deepsonar-mobile/);
+  assert.match(matrix, /deepsonar-reverse/);
   assert.match(matrix, /needs_human/);
   assert.match(matrix, /withRuntimeTestToolchainPolicy/);
   assert.match(matrix, /\/opt\/deepsonar\/manuals/);

@@ -21,6 +21,8 @@ DeepSonar 将通用命令行工具建模为**受治理、可插拔**的 Agent �
 
 专项工具 `strings` / `readelf` / `objdump` / `nm` / `sqlite3` / `curl` **不**纳入本基础包；`curl` 继续受网络出口策略控制。
 
+`binary.rea.cli`（REA/Ghidra 深度原生解析）登记在 CLI 目录中，但**仅**兼容 `deepsonar-reverse`；说明见 [`REA_CLI_CAPABILITIES.md`](REA_CLI_CAPABILITIES.md)。
+
 ## 控制面流程
 
 1. **目录**：`list_capabilities` / `search_capabilities` / `describe_capability` 返回上表 id；`describe_capability` 额外附带完整 `cli_capability` 元数据。

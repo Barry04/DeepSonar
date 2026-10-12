@@ -15,6 +15,7 @@ export const OFFICIAL_RUNTIME_IMAGE_KEYS = Object.freeze([
   "deepsonar-openharmony-audit",
   "deepsonar-openharmony-fuzz",
   "deepsonar-mobile",
+  "deepsonar-reverse",
 ] as const);
 
 export function isOfficialRuntimeImageKey(imageKey: unknown): imageKey is typeof OFFICIAL_RUNTIME_IMAGE_KEYS[number] {

@@ -300,6 +300,7 @@ const ALL_IMAGE_KEYS = Object.freeze([
   "deepsonar-clickhouse-test",
   "deepsonar-clickhouse-fuzz",
   "deepsonar-mobile",
+  "deepsonar-reverse",
 ] as const);
 
 function unknownRuntimeEvent(): Record<string, unknown>[] {

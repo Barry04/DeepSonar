@@ -50,6 +50,10 @@ const OFFICIAL_RUNTIME_IMAGE_BOUNDARIES: Readonly<Record<string, RuntimeImageBou
     toolset: "Android/iOS/OH：JADX/droidasc/apktool/adb/Frida 等",
     not_included: "MobSF/GUI/Ghidra/IDA/DevEco/MCP；禁止 droidasc --gui",
   },
+  "deepsonar-reverse": {
+    toolset: "REA CLI 6.4.0 + Ghidra 12.1.4 + JDK 21",
+    not_included: "MCP、常驻 REA、Hopper/IDA、动态调试；非全局默认",
+  },
   "deepsonar-kali-minimal": {
     toolset: "多语言动态测试工具链（JDK/Maven/Python/Go/Rust）",
     not_included: "Kali metapackage、GUI、DinD",

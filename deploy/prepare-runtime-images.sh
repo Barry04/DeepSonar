@@ -156,6 +156,7 @@ const builtinKeys = new Set([
   "deepsonar-clickhouse-test",
   "deepsonar-clickhouse-fuzz",
   "deepsonar-mobile",
+  "deepsonar-reverse",
 ]);
 const keys = new Set();
 for (const image of registry.images) {
@@ -361,6 +362,7 @@ prepare_builtin "clickhouse-audit" "deepsonar-clickhouse-audit" "deepsonar-click
 prepare_builtin "clickhouse-test" "deepsonar-clickhouse-test" "deepsonar-clickhouse-test:local" "$ROOT/deploy/Dockerfile.agent-clickhouse-test" "" "deepsonar-base:local"
 prepare_builtin "clickhouse-fuzz" "deepsonar-clickhouse-fuzz" "deepsonar-clickhouse-fuzz:local" "$ROOT/deploy/Dockerfile.agent-clickhouse-fuzz" "" "deepsonar-base:local"
 prepare_builtin "mobile" "deepsonar-mobile" "deepsonar-mobile:local" "$ROOT/deploy/Dockerfile.agent-mobile" "" "deepsonar-base:local"
+prepare_builtin "reverse" "deepsonar-reverse" "deepsonar-reverse:local" "$ROOT/deploy/Dockerfile.agent-reverse" "" "deepsonar-base:local"
 
 log "汇总：成功/模拟 ${SUCCESS_COUNT}，跳过 ${SKIP_COUNT}，失败 ${FAILURE_COUNT}"
 if [[ ${#FAILURES[@]} -gt 0 ]]; then

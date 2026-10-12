@@ -10,9 +10,9 @@
 
 | 条件 | 注入内容 |
 | --- | --- |
-| **任意角色**，且冻结镜像属于 13 个官方 key | `### Runtime tool manuals (Scheduler policy)`：先读 `/opt/deepsonar/manuals/index.json`，再按任务读取具体章节；手册不授予权限 |
+| **任意角色**，且冻结镜像属于 14 个官方 key | `### Runtime tool manuals (Scheduler policy)`：先读 `/opt/deepsonar/manuals/index.json`，再按任务读取具体章节；手册不授予权限 |
 | 角色 `test`，或 `verify` 且镜像 ≠ `deepsonar-base` | `### Runtime test toolchain (Scheduler policy)`（禁止 Job 内 bootstrap JDK/Maven/…；缺工具按角色证据边界报告） |
-| **任意角色**，且冻结镜像属于官方专项 key（见下表「Scheduler 边界」列） | 对应 chrome / clickhouse / openharmony / mobile 专项能力边界（与 mobile/OH 同级） |
+| **任意角色**，且冻结镜像属于官方专项 key（见下表「Scheduler 边界」列） | 对应 chrome / clickhouse / openharmony / mobile / reverse 专项能力边界 |
 | 角色走 `deepsonar-base` / `deepsonar-audit` / `deepsonar-kali-minimal` 且非上表 test/verify 动态路径 | 仍注入短索引提示，不注入整本手册或专项能力百科 |
 
 专项 key 列表锁定在 `SPECIALTY_RUNTIME_IMAGE_POLICIES`（`apps/scheduler/src/domains/role-runtime-snapshot/runtime-image-boundary-policy.ts`）。
@@ -55,8 +55,9 @@
 | `deepsonar-openharmony-audit` | 项目覆盖 audit/… | 主机 Clang/tidy/cppcheck/sparse + ASan/UBSan | 设备协议 hdc、密钥扫描器、DevEco | 缺主机工具 → 按角色证据边界报告；禁止把构建日志写成设备结果 | **任意角色**注入 OH host audit |
 | `deepsonar-openharmony-fuzz` | 项目覆盖 test/… | 主机 libFuzzer/AFL++ + sanitizer | DevEco、toy harness | 缺工具链 → 按角色证据边界报告 | **任意角色**注入 OH host fuzz |
 | `deepsonar-mobile` | 项目覆盖 audit/test/… | Android JADX/apktool/…/droidasc/apkcheckpack/adb/Frida；iOS libimobiledevice；OH HAP/hdc；`.so` radare2/LIEF | MobSF/jadx-gui/Burp/IDA/Ghidra/DevEco/第三方 MCP/mitmproxy；禁止 droidasc `--gui` | 空 adb/hdc/idevice → 按角色证据边界报告；勿用 JADX/droidasc 叙述冒充设备/流量 | **任意角色**注入 Mobile protocols |
+| `deepsonar-reverse` | 项目覆盖 audit/analyze/… | 钉死 REA CLI 6.4.0 + Ghidra 12.1.4 + 完整 JDK 21；能力 id `binary.rea.cli` | MCP、常驻 REA、Hopper/IDA、动态调试；非全局默认；不进入 mobile | REA/Ghidra 不可用 → 按角色证据边界报告；勿用 binutils/radare2 冒充深度反编译 | **任意角色**注入 Reverse / REA+Ghidra |
 
-Harness 出处：`agent-harness/chrome-*-runtime.json`、`clickhouse-*-runtime.json`、`mobile-runtime.json`、`openharmony-test-runtime.json`、`kali-minimal-runtime.json`、`runtime-images.json`；Dockerfile 头注释、`tool-manifest.json` 与 `runtime-manuals/catalog.json` 为构建期契约。完整手册在镜像内固定为 `/opt/deepsonar/manuals/`，Worker 按 `index.json` 定位当前镜像的工具章节。
+Harness 出处：`agent-harness/chrome-*-runtime.json`、`clickhouse-*-runtime.json`、`mobile-runtime.json`、`reverse-runtime.json`、`openharmony-test-runtime.json`、`kali-minimal-runtime.json`、`runtime-images.json`；Dockerfile 头注释、`tool-manifest.json` 与 `runtime-manuals/catalog.json` 为构建期契约。完整手册在镜像内固定为 `/opt/deepsonar/manuals/`，Worker 按 `index.json` 定位当前镜像的工具章节。
 
 ## Hub 目录与操作者 UI
 
@@ -70,7 +71,7 @@ Harness 出处：`agent-harness/chrome-*-runtime.json`、`clickhouse-*-runtime.j
 
 - 仓库源：`agent-harness/runtime-manuals/catalog.json`；每个镜像的继承工具在目录中完整展开。
 - 构建：`materialize-runtime-manuals.mjs` 按最终 `tool-manifest.json` 生成 `index.json`、`INDEX.md` 与逐工具章节；标签固定为 `/opt/deepsonar/manuals/index.json`。
-- 验收门禁：`test-runtime-manuals.mjs` 校验 13 镜像、字段、覆盖、Dockerfile 与 fingerprint；`test-runtime-manuals-runtime.mjs` 在断网降权容器中重算摘要并核对实际文件。
+- 验收门禁：`test-runtime-manuals.mjs` 校验 14 镜像、字段、覆盖、Dockerfile 与 fingerprint；`test-runtime-manuals-runtime.mjs` 在断网降权容器中重算摘要并核对实际文件。
 - Worker 发现：`withRuntimeTestToolchainPolicy` 对任意已解析官方镜像注入 manuals 阅读要求；专项边界策略亦指向 `INDEX.md`。
 - 说明书须覆盖 Agent 面向工具/包装入口（含继承工具），区分内部依赖；失败分类不得一律 `needs_human`。
 

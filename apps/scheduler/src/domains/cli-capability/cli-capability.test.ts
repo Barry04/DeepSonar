@@ -29,11 +29,12 @@ const EXPECTED_IDS = [
   "patch.diff",
   "execution.timeout",
   "archive.extract",
+  "binary.rea.cli",
 ] as const;
 
-test("catalog registers exactly the 10 phase-1 CLI capability ids (offline)", () => {
+test("catalog registers phase-1 CLI capability ids plus binary.rea.cli (offline)", () => {
   const listed = listCliCapabilities();
-  assert.equal(listed.length, 10);
+  assert.equal(listed.length, EXPECTED_IDS.length);
   assert.deepEqual([...PHASE1_CLI_CAPABILITY_IDS].sort(), [...EXPECTED_IDS].sort());
   for (const id of EXPECTED_IDS) {
     const module = findCliCapability(id);
@@ -49,6 +50,10 @@ test("catalog registers exactly the 10 phase-1 CLI capability ids (offline)", ()
   assert.equal(findCliCapability("file.discovery.fd")?.default_available, false);
   assert.equal(findCliCapability("yaml.query.yq")?.default_available, false);
   assert.equal(findCliCapability("patch.diff")?.default_available, false);
+  assert.equal(findCliCapability("binary.rea.cli")?.tool, "rea");
+  assert.equal(findCliCapability("binary.rea.cli")?.tool_version, "6.4.0");
+  assert.deepEqual(findCliCapability("binary.rea.cli")?.compatible_images, ["deepsonar-reverse"]);
+  assert.equal(findCliCapability("binary.rea.cli")?.default_available, true);
 });
 
 test("list_capabilities / search_capabilities / describe_capability expose CLI packs offline", () => {

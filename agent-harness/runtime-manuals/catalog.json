@@ -1,6 +1,6 @@
 {
   "schema": "deepsonar.runtime-manual-catalog/v1",
-  "catalog_version": "2026-09-17",
+  "catalog_version": "2026-10-12",
   "generated_by": "agent-harness/runtime-manuals/generate-catalog.mjs",
   "delivery_path": "/opt/deepsonar/manuals",
   "failure_categories": [
@@ -35461,12 +35461,2402 @@
       "entry_count": 94,
       "agent_visible_entry_count": 49,
       "implementation_only_entry_count": 45
+    },
+    {
+      "image_key": "deepsonar-reverse",
+      "manual_path": "/opt/deepsonar/manuals/images/deepsonar-reverse/index.md",
+      "self_contained": true,
+      "inherited_from": [
+        "deepsonar-base"
+      ],
+      "source_files": [
+        "agent-harness/reverse-runtime.json",
+        "deploy/Dockerfile.agent-reverse",
+        "deploy/reverse-env.sh",
+        "skills/deepsonar-rea-cli/SKILL.md"
+      ],
+      "sections": [
+        "inherited base tools",
+        "REA CLI",
+        "Ghidra headless",
+        "JDK 21"
+      ],
+      "entries": [
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "git",
+          "kind": "tool",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "1:2.39.5-0+deb12u3",
+          "version_source": "agent-harness/runtime-images.json#apt.git",
+          "commands": [
+            "git"
+          ],
+          "usage_scenario": "Inspect or update a checked-out source tree and preserve commit provenance.",
+          "selection_basis": "Use git for repository state and history; use rg for content search and a language tool for semantic analysis.",
+          "prerequisites": [
+            "Use a frozen job workspace.",
+            "Check the command version before relying on output."
+          ],
+          "minimal_invocation": "git status --short",
+          "common_parameters": [
+            "--status",
+            "--diff",
+            "--show-toplevel"
+          ],
+          "output_interpretation": "Commit, branch, and diff output establish source provenance; status alone does not prove source contents are safe.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "Save the raw output, normalize only with a documented transformation, then pass the artifact to the next tool or verifier.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Version is bound to the image manifest. Use a workspace-local output directory, bound resources, and remove temporary files after evidence is retained.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "python3",
+          "kind": "tool",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "3.11.2-1+b1",
+          "version_source": "agent-harness/runtime-images.json#apt.python3",
+          "commands": [
+            "python3"
+          ],
+          "usage_scenario": "Run small deterministic transforms or inspect structured artifacts when no specialized tool is needed.",
+          "selection_basis": "Use an image-provided Python runtime for glue logic; use uv or managed Python versions in Kali when a project dependency requires them.",
+          "prerequisites": [
+            "Use a frozen job workspace.",
+            "Check the command version before relying on output."
+          ],
+          "minimal_invocation": "python3 -c 'print(40 + 2)'",
+          "common_parameters": [
+            "-c",
+            "script path",
+            "input/output paths"
+          ],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "Save the raw output, normalize only with a documented transformation, then pass the artifact to the next tool or verifier.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Version is bound to the image manifest. Use a workspace-local output directory, bound resources, and remove temporary files after evidence is retained.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "curl",
+          "kind": "tool",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "7.88.1-10+deb12u15",
+          "version_source": "agent-harness/runtime-images.json#apt.curl",
+          "commands": [
+            "curl"
+          ],
+          "usage_scenario": "Fetch an explicitly permitted HTTP resource or probe a local service.",
+          "selection_basis": "Use only when the job network policy permits egress; use a protocol-specific client when one exists.",
+          "prerequisites": [
+            "Use a frozen job workspace.",
+            "Check the command version before relying on output."
+          ],
+          "minimal_invocation": "curl --fail --silent --show-error http://127.0.0.1:8080/health",
+          "common_parameters": [
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--location",
+            "--output"
+          ],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "Save the raw output, normalize only with a documented transformation, then pass the artifact to the next tool or verifier.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Version is bound to the image manifest. Use a workspace-local output directory, bound resources, and remove temporary files after evidence is retained.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "ripgrep",
+          "kind": "tool",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "13.0.0-4+b2",
+          "version_source": "agent-harness/runtime-images.json#apt.ripgrep",
+          "commands": [
+            "rg"
+          ],
+          "usage_scenario": "Find source symbols, strings, configuration keys, or references in a bounded workspace.",
+          "selection_basis": "Prefer rg for text search; use a parser or compiler database for syntax and semantic relationships.",
+          "prerequisites": [
+            "Use a frozen job workspace.",
+            "Check the command version before relying on output."
+          ],
+          "minimal_invocation": "rg --line-number --glob '!node_modules' 'TODO' /workspace",
+          "common_parameters": [
+            "--line-number",
+            "--glob",
+            "--type",
+            "--hidden"
+          ],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "Save the raw output, normalize only with a documented transformation, then pass the artifact to the next tool or verifier.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Version is bound to the image manifest. Use a workspace-local output directory, bound resources, and remove temporary files after evidence is retained.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "jq",
+          "kind": "tool",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "1.6-2.1+deb12u2",
+          "version_source": "agent-harness/runtime-images.json#apt.jq",
+          "commands": [
+            "jq"
+          ],
+          "usage_scenario": "Inspect and transform JSON manifests, receipts, and machine-readable tool output.",
+          "selection_basis": "Use jq for JSON only; preserve the original file because a transformed view is not evidence of the source.",
+          "prerequisites": [
+            "Use a frozen job workspace.",
+            "Check the command version before relying on output."
+          ],
+          "minimal_invocation": "jq -e '.status' result.json",
+          "common_parameters": [
+            "-e",
+            "-r",
+            "--arg",
+            "filter"
+          ],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "Save the raw output, normalize only with a documented transformation, then pass the artifact to the next tool or verifier.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Version is bound to the image manifest. Use a workspace-local output directory, bound resources, and remove temporary files after evidence is retained.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "file",
+          "kind": "tool",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "1:5.44-3",
+          "version_source": "agent-harness/runtime-images.json#apt.file",
+          "commands": [
+            "file"
+          ],
+          "usage_scenario": "Identify an unknown artifact before selecting an analyzer.",
+          "selection_basis": "Use file as a fast type hint; confirm with format-specific parsers or ELF metadata before drawing conclusions.",
+          "prerequisites": [
+            "Use a frozen job workspace.",
+            "Check the command version before relying on output."
+          ],
+          "minimal_invocation": "file --brief artifact.bin",
+          "common_parameters": [
+            "--brief",
+            "--mime-type",
+            "--dereference"
+          ],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "Use the type hint to select unzip, binutils, or a format-specific parser.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Version is bound to the image manifest. Use a workspace-local output directory, bound resources, and remove temporary files after evidence is retained.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "unzip",
+          "kind": "tool",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "6.0-28",
+          "version_source": "agent-harness/runtime-images.json#apt.unzip",
+          "commands": [
+            "unzip"
+          ],
+          "usage_scenario": "List or extract ZIP based APK, HAP, bundles, and ordinary archives.",
+          "selection_basis": "Use unzip for archive structure and extraction; use apktool/JADX/bundletool for format-aware Android analysis.",
+          "prerequisites": [
+            "Use a frozen job workspace.",
+            "Check the command version before relying on output."
+          ],
+          "minimal_invocation": "unzip -l sample.apk",
+          "common_parameters": [
+            "-l",
+            "-q",
+            "-o",
+            "-d"
+          ],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "Save the raw output, normalize only with a documented transformation, then pass the artifact to the next tool or verifier.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Version is bound to the image manifest. Use a workspace-local output directory, bound resources, and remove temporary files after evidence is retained.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "xz-utils",
+          "kind": "tool",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "5.4.1-1+deb12u2",
+          "version_source": "agent-harness/runtime-images.json#apt.xz-utils",
+          "commands": [
+            "xz",
+            "unxz"
+          ],
+          "usage_scenario": "Decompress source and tool archives supplied as xz files.",
+          "selection_basis": "Use it only for decompression; retain the original archive and verify its hash first.",
+          "prerequisites": [
+            "Use a frozen job workspace.",
+            "Check the command version before relying on output."
+          ],
+          "minimal_invocation": "xz --decompress --keep archive.tar.xz",
+          "common_parameters": [
+            "--decompress",
+            "--keep",
+            "--stdout"
+          ],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "Save the raw output, normalize only with a documented transformation, then pass the artifact to the next tool or verifier.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Version is bound to the image manifest. Use a workspace-local output directory, bound resources, and remove temporary files after evidence is retained.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "node",
+          "kind": "tool",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "22 (base image digest pinned)",
+          "version_source": "agent-harness/runtime-images.json#baseImage",
+          "commands": [
+            "node"
+          ],
+          "usage_scenario": "Run JavaScript smoke checks, local parsers, or an installed Agent CLI.",
+          "selection_basis": "Use Node for JavaScript and package entrypoints; use Python or a format-specific tool for other data models.",
+          "prerequisites": [
+            "Use a frozen job workspace.",
+            "Check the command version before relying on output."
+          ],
+          "minimal_invocation": "node --version",
+          "common_parameters": [
+            "--version",
+            "-e",
+            "script path"
+          ],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "Save the raw output, normalize only with a documented transformation, then pass the artifact to the next tool or verifier.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Version is bound to the image manifest. Use a workspace-local output directory, bound resources, and remove temporary files after evidence is retained.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "npm",
+          "kind": "tool",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "bundled with Node 22 base image",
+          "version_source": "agent-harness/runtime-images.json#baseImage",
+          "commands": [
+            "npm"
+          ],
+          "usage_scenario": "Inspect or run an already-installed package entrypoint in the image.",
+          "selection_basis": "Do not install packages during a job; the image snapshot is the authority.",
+          "prerequisites": [
+            "Use a frozen job workspace.",
+            "Check the command version before relying on output."
+          ],
+          "minimal_invocation": "npm --version",
+          "common_parameters": [
+            "--version",
+            "exec",
+            "prefix"
+          ],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "Save the raw output, normalize only with a documented transformation, then pass the artifact to the next tool or verifier.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Version is bound to the image manifest. Use a workspace-local output directory, bound resources, and remove temporary files after evidence is retained.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "npx",
+          "kind": "tool",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "bundled with Node 22 base image",
+          "version_source": "agent-harness/runtime-images.json#baseImage",
+          "commands": [
+            "npx"
+          ],
+          "usage_scenario": "Invoke a package binary only when it is already present in the frozen image.",
+          "selection_basis": "Do not let npx download from the network; use a declared image package.",
+          "prerequisites": [
+            "Use a frozen job workspace.",
+            "Check the command version before relying on output."
+          ],
+          "minimal_invocation": "npx --no-install --help",
+          "common_parameters": [
+            "--no-install",
+            "--package"
+          ],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "Save the raw output, normalize only with a documented transformation, then pass the artifact to the next tool or verifier.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Version is bound to the image manifest. Use a workspace-local output directory, bound resources, and remove temporary files after evidence is retained.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "claude-code",
+          "kind": "tool",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "2.1.296",
+          "version_source": "agent-harness/runtime-images.json#npm.@anthropic-ai/claude-code",
+          "commands": [
+            "claude"
+          ],
+          "usage_scenario": "Run the declared Claude Code Agent runtime within the Scheduler-controlled job.",
+          "selection_basis": "Use the CLI selected in the job snapshot; the CLI is an Agent runtime, not an audit result generator.",
+          "prerequisites": [
+            "Use a frozen job workspace.",
+            "Check the command version before relying on output."
+          ],
+          "minimal_invocation": "claude --version",
+          "common_parameters": [
+            "--version",
+            "working directory",
+            "job runtime options"
+          ],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "Save the raw output, normalize only with a documented transformation, then pass the artifact to the next tool or verifier.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Version is bound to the image manifest. Use a workspace-local output directory, bound resources, and remove temporary files after evidence is retained.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image.",
+          "covers": [
+            "@anthropic-ai/claude-code"
+          ]
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "pi-coding-agent",
+          "kind": "tool",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "1.1.0",
+          "version_source": "agent-harness/runtime-images.json#npm.@earendil-works/pi-coding-agent",
+          "commands": [
+            "pi"
+          ],
+          "usage_scenario": "Run the declared Pi Agent runtime for an image-compatible job.",
+          "selection_basis": "Use Pi when the frozen snapshot selects it; its web extension is available only in the audit variant.",
+          "prerequisites": [
+            "Use a frozen job workspace.",
+            "Check the command version before relying on output."
+          ],
+          "minimal_invocation": "pi --version",
+          "common_parameters": [
+            "--version",
+            "working directory",
+            "session options"
+          ],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "Save the raw output, normalize only with a documented transformation, then pass the artifact to the next tool or verifier.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Version is bound to the image manifest. Use a workspace-local output directory, bound resources, and remove temporary files after evidence is retained.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image.",
+          "covers": [
+            "@earendil-works/pi-coding-agent"
+          ]
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "dsh",
+          "kind": "tool",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh",
+          "commands": [
+            "dsh"
+          ],
+          "usage_scenario": "Run the official DSH Agent runtime and its governed control surface.",
+          "selection_basis": "Use DSH only through the Scheduler-provided job token and control API; ordinary text or shell output is not a control event.",
+          "prerequisites": [
+            "Use a frozen job workspace.",
+            "Check the command version before relying on output."
+          ],
+          "minimal_invocation": "dsh --help",
+          "common_parameters": [
+            "--help",
+            "workspace",
+            "session"
+          ],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "Save the raw output, normalize only with a documented transformation, then pass the artifact to the next tool or verifier.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Version is bound to the image manifest. Use a workspace-local output directory, bound resources, and remove temporary files after evidence is retained.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image.",
+          "covers": [
+            "@deepseek-ai/dsh"
+          ]
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "ca-certificates",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "20230311+deb12u1",
+          "version_source": "agent-harness/runtime-images.json#apt.ca-certificates",
+          "commands": [],
+          "usage_scenario": "Provide TLS trust for permitted HTTPS operations.",
+          "selection_basis": "This is a runtime dependency; it is not a substitute for the Scheduler network policy.",
+          "prerequisites": [
+            "Use the corresponding Agent runtime; package internals are not a direct command surface."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "Save the raw output, normalize only with a documented transformation, then pass the artifact to the next tool or verifier.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Not a direct Agent tool. Version is pinned for the corresponding runtime; do not mutate or replace package files in a job.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "dsh-runtime-modules",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.supporting_modules",
+          "commands": [],
+          "usage_scenario": "Support the DSH CLI's protocol, skill, sandbox, subprocess, filesystem, session, PTC, and compaction modules.",
+          "selection_basis": "These packages are implementation dependencies; Agents use the dsh entrypoint and governed operations.",
+          "prerequisites": [
+            "Use the corresponding Agent runtime; package internals are not a direct command surface."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "Save the raw output, normalize only with a documented transformation, then pass the artifact to the next tool or verifier.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Not a direct Agent tool. Version is pinned for the corresponding runtime; do not mutate or replace package files in a job.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-sdk-jsonrpc-server",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-sdk-jsonrpc-server",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-sdk-protocol",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-sdk-protocol",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-sdk-app",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-sdk-app",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-llm",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-llm",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-session",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-session",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-agent",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-agent",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-llm-retry",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-llm-retry",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-mcp-resources",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-mcp-resources",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-system-prompt",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-system-prompt",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-tools",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-tools",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-agent-loop",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-agent-loop",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-skill",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-skill",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-skill-filesystem",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-skill-filesystem",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-tool-skill",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-tool-skill",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-llm-pi-ai",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-llm-pi-ai",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-sandbox-local",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-sandbox-local",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-sandbox-policy",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-sandbox-policy",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-subprocess-local",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-subprocess-local",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-shell-env",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-shell-env",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-bash-local",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-bash-local",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-fs-local",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-fs-local",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-fs-observation-policy",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-fs-observation-policy",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-tool-fs",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-tool-fs",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-tool-fs-search",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-tool-fs-search",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-jobs-local",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-jobs-local",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-invariants",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-invariants",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-scope",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-scope",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-tool-bash",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-tool-bash",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-tool-str-replace-editor",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-tool-str-replace-editor",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-session-persistence-jsonl",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-session-persistence-jsonl",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-session-projection",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-session-projection",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-session-checkpoint-policy",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-session-checkpoint-policy",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-token-meter",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-token-meter",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-subagent",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-subagent",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-subagent-spawn-in-process",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-subagent-spawn-in-process",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-subagent-fork-in-process",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-subagent-fork-in-process",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-tool-subagent",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-tool-subagent",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-tool-subagent-control",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-tool-subagent-control",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-ptc-runtime",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-ptc-runtime",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-ptc-runtime-node",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-ptc-runtime-node",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-workflow-ptc",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-workflow-ptc",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "@deepseek-ai/dsh-compaction-basic",
+          "kind": "implementation_dependency",
+          "agent_visible": false,
+          "implementation_only": true,
+          "version": "0.2.0-rc.2",
+          "version_source": "agent-harness/runtime-images.json#npm.@deepseek-ai/dsh-compaction-basic",
+          "commands": [],
+          "usage_scenario": "Internal dependency loaded by the dsh Agent runtime.",
+          "selection_basis": "Agents select dsh; they do not invoke this package as a second execution channel.",
+          "prerequisites": [
+            "The dsh CLI and Scheduler-controlled runtime are present."
+          ],
+          "minimal_invocation": "not directly callable",
+          "common_parameters": [],
+          "output_interpretation": "No direct output contract; surfaced behavior must be attributed to the governed dsh operation and receipt.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "dsh -> Scheduler control API -> durable receipt/evidence.",
+          "evidence_retention": [
+            "dsh command",
+            "job and attempt identifiers",
+            "Scheduler receipt"
+          ],
+          "version_limits_side_effects_cleanup": "Do not import or replace this package from a job. The package is shipped only to support the pinned dsh runtime.",
+          "verification_status": "source_reviewed_not_shipped_as_command",
+          "verification_note": "Package is declared in the runtime manifest and has no standalone Agent command."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "java",
+          "kind": "tool",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "21 (Temurin full JDK)",
+          "version_source": "agent-harness/reverse-runtime.json#/downloads.jdk",
+          "commands": [
+            "java",
+            "javac",
+            "jar"
+          ],
+          "usage_scenario": "Run the full JDK 21 required by Ghidra 12.1.4 and REA native analysis.",
+          "selection_basis": "Use this image JDK only; do not substitute an unpinned host JRE.",
+          "prerequisites": [
+            "Read the frozen job image manifest and work under the job workspace."
+          ],
+          "minimal_invocation": "java -version",
+          "common_parameters": [
+            "-version",
+            "-jar",
+            "-cp"
+          ],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "Save the raw output, normalize only with a documented transformation, then pass the artifact to the next tool or verifier.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Version is bound to the image manifest. Use a workspace-local output directory, bound resources, and remove temporary files after evidence is retained.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "ghidra",
+          "kind": "tool",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "12.1.4",
+          "version_source": "agent-harness/reverse-runtime.json#/downloads.ghidra",
+          "commands": [
+            "analyzeHeadless",
+            "/opt/deepsonar/ghidra/support/analyzeHeadless"
+          ],
+          "usage_scenario": "Provide the pinned Ghidra headless engine that REA drives for native decompilation.",
+          "selection_basis": "Agents should prefer the REA CLI with --provider ghidra; call analyzeHeadless directly only when diagnosing provider readiness.",
+          "prerequisites": [
+            "Read the frozen job image manifest and work under the job workspace."
+          ],
+          "minimal_invocation": "analyzeHeadless /tmp/ghidra-proj Dummy -import /workspace/sample -analysisTimeoutPerFile 60",
+          "common_parameters": [
+            "-import",
+            "-process",
+            "-analysisTimeoutPerFile"
+          ],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "reverse-env.sh --check -> rea doctor --provider ghidra --json -> rea analyze/function --provider ghidra --json",
+          "evidence_retention": [
+            "Ghidra version",
+            "analyzeHeadless path",
+            "GHIDRA_INSTALL_DIR",
+            "JAVA_HOME",
+            "stderr",
+            "exit code"
+          ],
+          "version_limits_side_effects_cleanup": "Version is bound to the image manifest. Use a workspace-local output directory, bound resources, and remove temporary files after evidence is retained.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Catalog pins Ghidra 12.1.4; PR1 did not execute headless analysis on a sample."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "rea",
+          "kind": "tool",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "6.4.0",
+          "version_source": "agent-harness/reverse-runtime.json#/managed.npm.rea-agents",
+          "commands": [
+            "rea",
+            "rea-agents"
+          ],
+          "usage_scenario": "Run governed REA CLI native workflows: analyze, search, function, decompile, instructions, xrefs, trace-native-values, and inspect-analysis-view.",
+          "selection_basis": "Use only inside deepsonar-reverse with --provider ghidra; do not register MCP or install Hopper/IDA. Prefer one function dossier before deep traces.",
+          "prerequisites": [
+            "Read the frozen job image manifest and work under the job workspace."
+          ],
+          "minimal_invocation": "rea function /workspace/sample main --provider ghidra --json",
+          "common_parameters": [
+            "analyze",
+            "search",
+            "function",
+            "decompile",
+            "instructions",
+            "xrefs",
+            "trace-native-values",
+            "inspect-analysis-view",
+            "--provider",
+            "ghidra",
+            "--json",
+            "--snapshot"
+          ],
+          "output_interpretation": "JSON observations include pseudocode, instructions, xrefs, or bounded value-flow. Success exit does not prove a vulnerability. Truncated or partial JSON is inconclusive.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "file/hash sample -> rea analyze --provider ghidra --json -> rea function/decompile/xrefs as needed -> inspect-analysis-view on saved views -> Evidence/Fact via Control API",
+          "evidence_retention": [
+            "sample SHA-256",
+            "rea-agents 6.4.0",
+            "Ghidra 12.1.4",
+            "image digest",
+            "redacted argv",
+            "stdout JSON",
+            "stderr",
+            "exit code",
+            "truncation flags"
+          ],
+          "version_limits_side_effects_cleanup": "Pinned to rea-agents@6.4.0 / gitHead a56f7bb668ab23fec8d33f7af353ac7ed2fe1895. Snapshot files are exact-query caches, not persistent Ghidra databases. Keep workspace-local outputs; delete ephemeral provider temps after evidence retention.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "PR1 wires pins and manuals; real REA/Ghidra sample runs remain a follow-up acceptance item."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "reverse-env",
+          "kind": "tool",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "image helper",
+          "version_source": "deploy/reverse-env.sh",
+          "commands": [
+            "reverse-env.sh",
+            "/opt/deepsonar/bin/reverse-env.sh"
+          ],
+          "usage_scenario": "Verify REA, Ghidra, JDK 21, and Node >= 22.19 before analysis.",
+          "selection_basis": "Run --check after sandbox start or when doctor reports provider issues.",
+          "prerequisites": [
+            "Read the frozen job image manifest and work under the job workspace."
+          ],
+          "minimal_invocation": "reverse-env.sh --check",
+          "common_parameters": [
+            "--check"
+          ],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "Save the raw output, normalize only with a documented transformation, then pass the artifact to the next tool or verifier.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Version is bound to the image manifest. Use a workspace-local output directory, bound resources, and remove temporary files after evidence is retained.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image."
+        },
+        {
+          "image_key": "deepsonar-reverse",
+          "id": "reverse-rea-selection",
+          "kind": "capability",
+          "agent_visible": true,
+          "implementation_only": false,
+          "version": "rea-agents 6.4.0 / Ghidra 12.1.4 / JDK 21",
+          "version_source": "deploy/Dockerfile.agent-reverse#inline manifest",
+          "commands": [
+            "rea",
+            "analyzeHeadless",
+            "java"
+          ],
+          "usage_scenario": "Choose REA CLI subcommands for native overview, function dossier, pseudocode, xrefs, or bounded value-flow under Ghidra.",
+          "selection_basis": "Prefer REA over raw analyzeHeadless for governed JSON Evidence. Do not use this image for APK device protocols (use mobile) or light .so metadata alone (mobile radare2/LIEF may suffice).",
+          "prerequisites": [
+            "Read the frozen job image manifest and work under the job workspace."
+          ],
+          "minimal_invocation": "reverse-env.sh --check -> rea analyze SAMPLE --provider ghidra --json -> rea function SAMPLE SYM --provider ghidra --json",
+          "common_parameters": [
+            "absolute sample path",
+            "--provider ghidra",
+            "--json",
+            "optional --snapshot"
+          ],
+          "output_interpretation": "Treat stdout/stderr and exit code as observations. A successful process does not prove a security conclusion by itself.",
+          "failure_handling": {
+            "normal_empty": "A successful command with no match, no rows, or no device is an empty observation; save it as empty and do not turn it into a failure.",
+            "model_correctable": "For an invalid path, option, format, or query, read stderr, correct the input, and retry with a new command and recorded revision.",
+            "transient_retryable": "For a busy process, temporary network error, or service startup race, retain logs and retry within the job budget after checking for duplicate side effects.",
+            "missing_condition": "If a required file, device, authorization, service, network permission, or architecture is absent, record inconclusive/needs_human with the missing condition.",
+            "permanent": "For unsupported input, corrupt artifacts, an unavailable binary, or an unrecoverable exit, stop and record permanent_failure with stderr and the exact command."
+          },
+          "composition_flow": "hash sample -> analyze/function -> optional decompile/xrefs/trace -> inspect-analysis-view -> Control API Evidence.",
+          "evidence_retention": [
+            "Exact command and arguments",
+            "image key and digest",
+            "tool version",
+            "stdout/stderr",
+            "exit code",
+            "input and output hashes"
+          ],
+          "version_limits_side_effects_cleanup": "Version is bound to the image manifest. Use a workspace-local output directory, bound resources, and remove temporary files after evidence is retained.",
+          "verification_status": "source_declared_unexecuted",
+          "verification_note": "Entry is derived from the pinned source manifest; this catalog run did not build or execute the image."
+        }
+      ],
+      "entry_count": 63,
+      "agent_visible_entry_count": 19,
+      "implementation_only_entry_count": 44
     }
   ],
   "totals": {
-    "image_count": 13,
-    "entry_count": 920,
-    "agent_visible_entry_count": 343,
-    "implementation_only_entry_count": 577
+    "image_count": 14,
+    "entry_count": 983,
+    "agent_visible_entry_count": 362,
+    "implementation_only_entry_count": 621
   }
 }

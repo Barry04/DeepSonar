@@ -256,6 +256,17 @@ export const PRESETS = {
     ],
     platforms: "linux/amd64,linux/arm64",
   },
+  "deepsonar-reverse": {
+    dockerfile: "deploy/Dockerfile.agent-reverse",
+    paths: [
+      "agent-harness/reverse-runtime.json",
+      "deploy/reverse-env.sh",
+      "skills/deepsonar-rea-cli/SKILL.md",
+      "agent-harness/runtime-manuals",
+      "agent-harness/materialize-runtime-manuals.mjs",
+    ],
+    platforms: "linux/amd64,linux/arm64",
+  }
 };
 
 function fail(msg) {

@@ -709,6 +709,17 @@
           }
         }
       ]
+    },
+    {
+      "image_key": "deepsonar-reverse",
+      "name": "DeepSonar Reverse",
+      "description": "深度原生二进制解析运行时：钉死 REA CLI 6.4.0 + Ghidra 12.1.4 + 完整 JDK 21；project opt-in；CLI-only，不预装 MCP/Hopper/IDA/常驻服务；不改变全局默认",
+      "publisher": "SummerSec",
+      "source_kind": "official",
+      "source_url": "https://github.com/SummerSec/DeepSonar",
+      "project_opt_in": true,
+      "default_role": "audit",
+      "versions": []
     }
   ],
   "source": "remote"

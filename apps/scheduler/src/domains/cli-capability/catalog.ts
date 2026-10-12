@@ -29,6 +29,7 @@ export const BASE_CLI_COMPATIBLE_IMAGES = [
   "deepsonar-openharmony-audit",
   "deepsonar-openharmony-fuzz",
   "deepsonar-mobile",
+  "deepsonar-reverse",
 ] as const;
 
 const DEFAULT_LIMITS = {
@@ -274,6 +275,53 @@ export const CLI_CAPABILITY_MANIFESTS: readonly CliManifest[] = [
     summary: "Governed tar/unzip/xz archive inspect and extract under the Job workspace.",
     example_invocation: "unzip -l sample.zip",
   }),
+
+  manifest({
+    id: "binary.rea.cli",
+    version: "1.0.0",
+    tool: "rea",
+    tool_version: "6.4.0",
+    binaries: ["rea", "rea-agents"],
+    compatible_images: ["deepsonar-reverse"],
+    default_available: true,
+    permissions: ["read_workspace", "write_workspace"],
+    network: "disabled",
+    limits: { max_calls_per_job: 32, timeout_ms: 600_000, max_output_bytes: 4_194_304 },
+    common_args: [
+      "analyze",
+      "search",
+      "function",
+      "decompile",
+      "instructions",
+      "xrefs",
+      "trace-native-values",
+      "inspect-analysis-view",
+      "--provider",
+      "ghidra",
+      "--json",
+      "--snapshot",
+    ],
+    evidence_types: ["native_analysis_json", "pseudocode", "xrefs", "static_value_flow"],
+    non_inferable_conclusions: [
+      "CLI stdout/stderr is Evidence/Fact input only; never a security Finding",
+      "Pseudocode and static value flow are not original source code",
+      "Static REA/Ghidra results are not dynamic proof or verified vulnerabilities",
+      "Partial/truncated/cancelled analysis must not be treated as success",
+    ],
+    failure_policy:
+      "On missing REA/Ghidra, incompatible image, or unparseable freeze return capability_unavailable; never apt/npm install analysis engines in-job. Truncation/timeouts are inconclusive.",
+    cleanup:
+      "Retain raw JSON, redacted stderr, exit code, truncation flags, sample SHA-256, tool versions, image digest and redacted argv under the Job workspace before sandbox cleanup.",
+    manual_paths: [
+      "agent-harness/runtime-manuals/catalog.json#deepsonar-reverse/rea",
+      "skills/deepsonar-rea-cli/SKILL.md",
+      "docs/REA_CLI_CAPABILITIES.md",
+    ],
+    summary:
+      "Governed REA CLI (#718) on deepsonar-reverse for native analyze/decompile/xrefs/trace; CLI-only, no MCP; Hub proposes binary.rea.cli, Scheduler freezes.",
+    example_invocation: "rea function /workspace/sample main --provider ghidra --json",
+  }),
+
 ];
 
 export const PHASE1_CLI_CAPABILITY_IDS = CLI_CAPABILITY_MANIFESTS.map((m) => m.id) as readonly string[];
