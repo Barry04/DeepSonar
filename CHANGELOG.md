@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### 新增
+
+- 接入 project opt-in 深度二进制解析镜像 `deepsonar-reverse`（#718 PR1）：从 `deepsonar-base` 派生，钉死 `rea-agents@6.4.0`（gitHead `a56f7bb…` + npm integrity）、Ghidra 12.1.4（checksum）与完整 JDK 21；构建期校验 Node ≥ 22.19 与 arch 匹配 native decompiler。CLI-only（无 MCP/Hopper/IDA/常驻服务），不改变全局默认，也不把 Ghidra 塞进 `deepsonar-mobile`。同步 runtime manifest、离线手册、fingerprint、registry（首发 `versions: []`）、Image Admission 一致性门禁、Hub 能力表、Scheduler 专项边界、受治理 CLI 能力 `binary.rea.cli` 与 Skill `deepsonar-rea-cli`（content hash）。真实样本实跑、体积/冷启动测量、Job 端到端闭环，以及 reverse-runtime/release workflow（需 `workflow` scope）留待后续 PR。
+
 ## [0.5.3] - 2026-10-12
 
 ### 修复

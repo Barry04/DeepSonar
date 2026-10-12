@@ -173,8 +173,22 @@ const OFFICIAL_HUB_IMAGE_CAPABILITIES: Readonly<Record<string, HubRuntimeImageCa
       "APK/AAB/移动端包或 adb/Frida → mobile",
       "大包按需 class/xref 用 droidasc；完整反编译用 JADX；勿用 ASC 叙述冒充设备/流量",
       "纯 OH 设备协议也可选 openharmony-test；通用源码审计不要用 mobile",
+      "需要 Ghidra/REA 深度反编译选 deepsonar-reverse，不要用 mobile",
     ],
     capabilities: ["apk", "adb", "frida", "ios-host", "hdc", "mobile-native", "apk-xref-search"],
+  },
+  "deepsonar-reverse": {
+    purpose: "深度原生二进制解析：REA CLI + Ghidra（project opt-in）",
+    tool_summary: "钉死 rea-agents@6.4.0 CLI、Ghidra 12.1.4 headless、完整 JDK 21；能力 id binary.rea.cli",
+    not_included: "MCP、常驻 REA 服务、Hopper/IDA、动态调试、设备执行；不改变全局默认镜像；不进入 mobile",
+    suited_roles: ["audit", "analyze", "explore", "verify"],
+    suited_evidence: ["函数伪代码", "汇编/指令", "交叉引用", "有界静态值流", "分析视图"],
+    selection_hints: [
+      "ELF/.so/PE 需要 Ghidra 级反编译/xrefs/值流 → deepsonar-reverse",
+      "仅轻量 .so 元数据/radare2 仍可用 mobile；不要为 APK/设备协议选 reverse",
+      "CLI-only：通过 list_capabilities 选 binary.rea.cli，禁止临时安装分析引擎",
+    ],
+    capabilities: ["rea-cli", "ghidra-headless", "native-decompile", "native-xrefs", "binary.rea.cli"],
   },
 });
 

@@ -33,6 +33,7 @@ const EXPECTED_KEYS = [
   "deepsonar-clickhouse-test",
   "deepsonar-clickhouse-fuzz",
   "deepsonar-mobile",
+  "deepsonar-reverse",
 ];
 
 // v2 consolidates all platforms into one version; the legacy v1 compatibility

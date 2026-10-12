@@ -81,6 +81,8 @@ const clickhouseRuntimeSmoke = readFileSync(new URL("./test-clickhouse-runtime.m
 const clickhouseWorkflow = readFileSync(new URL("../.github/workflows/clickhouse-runtime.yml", import.meta.url), "utf8");
 const mobileConfig = JSON.parse(readFileSync(new URL("./mobile-runtime.json", import.meta.url), "utf8"));
 const mobileDockerfile = readFileSync(new URL("../deploy/Dockerfile.agent-mobile", import.meta.url), "utf8");
+const reverseConfig = JSON.parse(readFileSync(new URL("./reverse-runtime.json", import.meta.url), "utf8"));
+const reverseDockerfile = readFileSync(new URL("../deploy/Dockerfile.agent-reverse", import.meta.url), "utf8");
 const mobileEnv = readFileSync(new URL("../deploy/mobile-env.sh", import.meta.url), "utf8");
 const mobileAdb = readFileSync(new URL("../deploy/mobile-adb.sh", import.meta.url), "utf8");
 const mobileAdbBin = readFileSync(new URL("../deploy/mobile-adb-bin.sh", import.meta.url), "utf8");
@@ -91,6 +93,8 @@ const mobileSo = readFileSync(new URL("../deploy/mobile-so.sh", import.meta.url)
 const mobileApkCheckPackBin = readFileSync(new URL("../deploy/mobile-apkcheckpack-bin.sh", import.meta.url), "utf8");
 const mobileSmoke = readFileSync(new URL("./test-mobile-runtime.mjs", import.meta.url), "utf8");
 const mobileWorkflow = readFileSync(new URL("../.github/workflows/mobile-runtime.yml", import.meta.url), "utf8");
+const reverseEnv = readFileSync(new URL("../deploy/reverse-env.sh", import.meta.url), "utf8");
+const reverseSmoke = readFileSync(new URL("./test-reverse-runtime.mjs", import.meta.url), "utf8");
 const mavenSmoke = readFileSync(new URL("./test-maven-package.mjs", import.meta.url), "utf8");
 const ciWorkflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
 const schedulerRuntimeSnapshot = [
@@ -153,7 +157,7 @@ const expectDockerfileParse = (source, label) => {
 expect(FINGERPRINT_SCHEMA_VERSION === "v2", "fingerprint schema version must be bumped deliberately when semantics change");
 expect(COMMON_FINGERPRINT_PATHS.length === 1 && COMMON_FINGERPRINT_PATHS[0] === ".dockerignore", "all image fingerprints must include the shared .dockerignore input");
 expect(dockerIgnore.trim().length > 0, ".dockerignore must remain present for image-context fingerprinting");
-expect(runtimeManualStatic.includes("deepsonar-base") && runtimeManualStatic.includes("deepsonar-mobile"), "runtime manual static gate must enumerate official images");
+expect(runtimeManualStatic.includes("deepsonar-base") && runtimeManualStatic.includes("deepsonar-mobile") && runtimeManualStatic.includes("deepsonar-reverse"), "runtime manual static gate must enumerate official images");
 expect(runtimeManualRuntime.includes('"--network", "none"') && runtimeManualRuntime.includes("manual_sha256"), "runtime manual smoke must verify offline files and hash");
 expect(runtimeManualMaterializer.includes("tool manifest entries without documentation") && runtimeManualMaterializer.includes("manual_sha256"), "runtime manual materializer must fail closed on coverage and emit integrity metadata");
 for (const [imageKey, source] of [
@@ -162,13 +166,14 @@ for (const [imageKey, source] of [
   ["deepsonar-chrome-audit", chromeAuditDockerfile], ["deepsonar-chrome-test", chromeTestDockerfile], ["deepsonar-chrome-fuzz", chromeFuzzDockerfile],
   ["deepsonar-clickhouse-audit", clickhouseAuditDockerfile], ["deepsonar-clickhouse-test", clickhouseTestDockerfile], ["deepsonar-clickhouse-fuzz", clickhouseFuzzDockerfile],
   ["deepsonar-mobile", mobileDockerfile],
+  ["deepsonar-reverse", reverseDockerfile],
 ]) {
   expect(source.includes("agent-harness/runtime-manuals") && source.includes("materialize-runtime-manuals.mjs"), `${imageKey} must materialize the canonical manual catalog`);
   expect(source.includes('io.deepsonar.manuals="/opt/deepsonar/manuals/index.json"'), `${imageKey} must publish the OCI manual label`);
 }
 for (const imageKey of [
   "deepsonar-base", "deepsonar-audit", "deepsonar-kali-minimal", "deepsonar-openharmony-test", "deepsonar-openharmony-audit", "deepsonar-openharmony-fuzz",
-  "deepsonar-chrome-audit", "deepsonar-chrome-test", "deepsonar-chrome-fuzz", "deepsonar-clickhouse-audit", "deepsonar-clickhouse-test", "deepsonar-clickhouse-fuzz", "deepsonar-mobile",
+  "deepsonar-chrome-audit", "deepsonar-chrome-test", "deepsonar-chrome-fuzz", "deepsonar-clickhouse-audit", "deepsonar-clickhouse-test", "deepsonar-clickhouse-fuzz", "deepsonar-mobile", "deepsonar-reverse",
 ]) {
   expect(PRESETS[imageKey]?.paths?.includes("agent-harness/runtime-manuals"), `${imageKey} fingerprint must include canonical manual sources`);
   expect(PRESETS[imageKey]?.paths?.includes("agent-harness/materialize-runtime-manuals.mjs"), `${imageKey} fingerprint must include materializer`);
@@ -215,6 +220,7 @@ assertSpecialistWorkflow(mobileWorkflow, "Mobile", [
   "agent-harness/test-runtime-manuals.mjs", "agent-harness/test-runtime-manuals-runtime.mjs",
   "agent-harness/image-build-fingerprint.mjs", "agent-harness/resolve-image-src-cache.sh", ".github/workflows/mobile-runtime.yml",
 ]);
+
 expect(!ciWorkflow.includes("chrome-runtime-images"), "core ci workflow must not contain the Chrome specialist job");
 expect(!ciWorkflow.includes("clickhouse-runtime-images"), "core ci workflow must not contain the ClickHouse specialist job");
 expect(!ciWorkflow.includes("openharmony-runtime-images"), "core ci workflow must not contain the OpenHarmony specialist job");
@@ -454,6 +460,37 @@ if (mobileImage) {
   expect(mobileImage.default_role === "audit", "deepsonar-mobile default_role 必须是 audit");
   expect(Array.isArray(mobileImage.versions), "deepsonar-mobile registry versions 必须是数组");
 }
+const reverseImage = openHarmonyRegistry.images?.find((entry) => entry.image_key === "deepsonar-reverse");
+expect(reverseImage, "registry 缺少 deepsonar-reverse");
+if (reverseImage) {
+  expect(reverseImage.source_kind === "official", "deepsonar-reverse 必须是 official");
+  expect(reverseImage.project_opt_in === true, "deepsonar-reverse 必须启用 project_opt_in");
+  expect(reverseImage.default_role === "audit", "deepsonar-reverse default_role 必须是 audit");
+  expect(Array.isArray(reverseImage.versions), "deepsonar-reverse registry versions 必须是数组");
+}
+expect(reverseConfig.contract === "deepsonar.runtime.contract/v1", "Reverse runtime contract drift");
+expect(reverseConfig.project_opt_in === true, "Reverse config must remain project_opt_in");
+expect(reverseConfig.platforms?.join(",") === "linux/amd64,linux/arm64", "Reverse must declare both release platforms");
+expect(reverseConfig.downloads?.ghidra?.version === "12.1.4", "Reverse must pin Ghidra 12.1.4");
+expect(reverseConfig.downloads?.ghidra?.assets?.all?.sha256 === "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db", "Reverse Ghidra SHA256 drift");
+expect(reverseConfig.managed?.npm?.["rea-agents"]?.version === "6.4.0", "Reverse must pin rea-agents 6.4.0");
+expect(reverseConfig.managed?.npm?.["rea-agents"]?.gitHead === "a56f7bb668ab23fec8d33f7af353ac7ed2fe1895", "Reverse rea-agents gitHead drift");
+expect(reverseConfig.skill?.id === "deepsonar-rea-cli", "Reverse must declare governed skill id");
+expect(typeof reverseConfig.skill?.content_hash === "string" && reverseConfig.skill.content_hash.startsWith("sha256:"), "Reverse skill content_hash required");
+expect(reverseDockerfile.includes("ARG BASE_IMAGE=deepsonar-base:local"), "Reverse must default to local governed base");
+expect(reverseDockerfile.includes("REA_AGENTS_VERSION=6.4.0"), "Reverse Dockerfile must pin rea-agents 6.4.0");
+expect(reverseDockerfile.includes("GHIDRA_VERSION=12.1.4"), "Reverse Dockerfile must pin Ghidra 12.1.4");
+expect(reverseDockerfile.includes("NODE_MIN_VERSION=22.19.0"), "Reverse Dockerfile must enforce Node >= 22.19");
+expect(reverseDockerfile.includes("USER deepsonar"), "Reverse must run as non-root");
+expect(reverseDockerfile.includes("linux_x86_64") && reverseDockerfile.includes("linux_arm_64"), "Reverse must require arch-matching native decompiler");
+expect(reverseEnv.includes("deepsonar-reverse"), "reverse-env must target deepsonar-reverse");
+expect(reverseSmoke.includes("content_hash"), "reverse smoke must verify skill content hash");
+expect(PRESETS["deepsonar-reverse"]?.paths?.includes("agent-harness/reverse-runtime.json"), "Reverse fingerprint must include the runtime manifest");
+expect(PRESETS["deepsonar-reverse"]?.paths?.includes("deploy/reverse-env.sh"), "Reverse fingerprint must include reverse-env");
+expect(PRESETS["deepsonar-reverse"]?.paths?.includes("skills/deepsonar-rea-cli/SKILL.md"), "Reverse fingerprint must include governed skill");
+expect(readFileSync(new URL("../package.json", import.meta.url), "utf8").includes("test-reverse-runtime.mjs"), "ci:images must run the Reverse helper smoke");
+expect(prepareScript.includes("deepsonar-reverse") && prepareScript.includes("Dockerfile.agent-reverse"), "prepare 脚本必须接入 Reverse 镜像");
+
 expect(mobileConfig.contract === "deepsonar.runtime.contract/v1", "Mobile runtime contract drift");
 expect(mobileConfig.project_opt_in === true, "Mobile config must remain project_opt_in");
 expect(mobileConfig.platforms?.join(",") === "linux/amd64,linux/arm64", "Mobile must declare both release platforms");
@@ -552,6 +589,7 @@ expectDockerfileParse(clickhouseAuditDockerfile, "Dockerfile.agent-clickhouse-au
 expectDockerfileParse(clickhouseTestDockerfile, "Dockerfile.agent-clickhouse-test");
 expectDockerfileParse(clickhouseFuzzDockerfile, "Dockerfile.agent-clickhouse-fuzz");
 expectDockerfileParse(mobileDockerfile, "Dockerfile.agent-mobile");
+expectDockerfileParse(reverseDockerfile, "Dockerfile.agent-reverse");
 expect(mobileEnv.includes("r2 -qv") && mobileEnv.includes("mobile-so.sh --check"), "Mobile env check must smoke radare2 and SO helper");
 expect(mobileSo.includes("readelf") && mobileSo.includes("r2 -qq") && mobileSo.includes("lief"), "Mobile SO helper must inspect ELF with readelf/r2/LIEF");
 expect(mobileAdb.includes("needs_human") && mobileAdb.includes("inconclusive") && mobileAdb.includes("no_adb_target"), "Mobile adb helper must emit structured no-target evidence");
@@ -816,6 +854,7 @@ const officialRuntimeSources = [
   ["chrome-fuzz-runtime.json", JSON.stringify(chromeFuzzConfig)],
   ["openharmony-test-runtime.json", JSON.stringify(openHarmonyTestConfig)],
   ["mobile-runtime.json", JSON.stringify(mobileConfig)],
+  ["reverse-runtime.json", JSON.stringify(reverseConfig)],
   ["Dockerfile.agent", dockerfile],
   ["Dockerfile.agent-kali-minimal", kaliDockerfile],
   ["Dockerfile.agent-chrome-audit", chromeAuditDockerfile],
@@ -825,6 +864,7 @@ const officialRuntimeSources = [
   ["Dockerfile.agent-openharmony-audit", openHarmonyAuditDockerfile],
   ["Dockerfile.agent-openharmony-fuzz", openHarmonyFuzzDockerfile],
   ["Dockerfile.agent-mobile", mobileDockerfile],
+  ["Dockerfile.agent-reverse", reverseDockerfile],
   ["agent-harness/image.mjs", localDefinition],
 ];
 for (const [label, source] of officialRuntimeSources) {
@@ -966,6 +1006,7 @@ expect(releaseWorkflow.includes('git push origin "HEAD:${DEFAULT_BRANCH}"') || r
 expect(releaseWorkflow.includes("chore(release): sync runtime-image-registry.json"), "release workflow 回写提交信息必须可识别");
 expect(releaseWorkflow.includes("kali-minimal:"), "release workflow 缺少 Kali 独立 job（避免多架构同作业 ENOSPC）");
 expect(releaseWorkflow.includes("  mobile:") && releaseWorkflow.includes("Dockerfile.agent-mobile"), "release workflow 必须发布 Mobile 专项镜像");
+// #718 PR1: reverse-runtime.yml / release reverse job need `workflow` OAuth scope to land; follow-up before first v* that publishes reverse.
 expect(
   /mobile:[\s\S]*setup-qemu-action@v3[\s\S]*Dockerfile\.agent-mobile/.test(releaseWorkflow),
   "release mobile job must set up QEMU before the multi-arch build",
@@ -1066,4 +1107,4 @@ if (failures.length) {
   console.error(failures.map((item) => `- ${item}`).join("\n"));
   process.exit(1);
 }
-console.log(`运行时镜像定义一致（${[...Object.keys(config.toolsets), ...Object.keys(kaliConfig.toolsets), "openharmony-test", "openharmony-audit", "openharmony-fuzz", "chrome-audit", "chrome-test", "chrome-fuzz", "clickhouse-audit", "clickhouse-test", "clickhouse-fuzz", "mobile"].join("、")}）`);
+console.log(`运行时镜像定义一致（${[...Object.keys(config.toolsets), ...Object.keys(kaliConfig.toolsets), "openharmony-test", "openharmony-audit", "openharmony-fuzz", "chrome-audit", "chrome-test", "chrome-fuzz", "clickhouse-audit", "clickhouse-test", "clickhouse-fuzz", "mobile", "reverse"].join("、")}）`);

@@ -389,14 +389,26 @@ const mobileDefs = (imageKey) => [
   capability(imageKey, "mobile-native-selection", "radare2 6.2.0 / LIEF 1.0.0 / binutils", "deploy/Dockerfile.agent-mobile#inline manifest", ["file", "readelf", "objdump", "nm", "r2", "python3"], "Analyze native .so files from fast metadata through deeper structural inspection.", "Start with file/readelf/objdump/nm; use r2 for interactive control-flow exploration and LIEF for scripted structures.", "file lib.so -> readelf -hW lib.so -> r2 -q -c 'iI' lib.so", ["input .so", "symbol/section query", "r2 command", "output path"]),
   capability(imageKey, "mobile-hap-device-boundary", "hdc 3.2.0b / SDK 6.0.0.47", "deploy/Dockerfile.agent-mobile#inline manifest", ["mobile-hap.sh", "mobile-hdc.sh"], "Keep static HAP package observations separate from live OpenHarmony device observations.", "Use mobile-hap.sh without a device; use mobile-hdc.sh only when a target and authorization are available.", "mobile-hap.sh inspect sample.hap -> mobile-hdc.sh targets", ["HAP path", "target", "operation"], { output_interpretation: "HAP metadata proves package contents at the captured hash; it does not prove installed or runtime behavior." })
 ];
+
+const reverseDefs = (imageKey) => [
+  def(imageKey, "java", "21 (Temurin full JDK)", "agent-harness/reverse-runtime.json#/downloads.jdk", ["java", "javac", "jar"], "Run the full JDK 21 required by Ghidra 12.1.4 and REA native analysis.", "Use this image JDK only; do not substitute an unpinned host JRE.", "java -version", ["-version", "-jar", "-cp"]),
+  def(imageKey, "ghidra", "12.1.4", "agent-harness/reverse-runtime.json#/downloads.ghidra", ["analyzeHeadless", "/opt/deepsonar/ghidra/support/analyzeHeadless"], "Provide the pinned Ghidra headless engine that REA drives for native decompilation.", "Agents should prefer the REA CLI with --provider ghidra; call analyzeHeadless directly only when diagnosing provider readiness.", "analyzeHeadless /tmp/ghidra-proj Dummy -import /workspace/sample -analysisTimeoutPerFile 60", ["-import", "-process", "-analysisTimeoutPerFile"], { verification_status: "source_declared_unexecuted", verification_note: "Catalog pins Ghidra 12.1.4; PR1 did not execute headless analysis on a sample.", composition_flow: "reverse-env.sh --check -> rea doctor --provider ghidra --json -> rea analyze/function --provider ghidra --json", evidence_retention: ["Ghidra version", "analyzeHeadless path", "GHIDRA_INSTALL_DIR", "JAVA_HOME", "stderr", "exit code"] }),
+  def(imageKey, "rea", "6.4.0", "agent-harness/reverse-runtime.json#/managed.npm.rea-agents", ["rea", "rea-agents"], "Run governed REA CLI native workflows: analyze, search, function, decompile, instructions, xrefs, trace-native-values, and inspect-analysis-view.", "Use only inside deepsonar-reverse with --provider ghidra; do not register MCP or install Hopper/IDA. Prefer one function dossier before deep traces.", "rea function /workspace/sample main --provider ghidra --json", ["analyze", "search", "function", "decompile", "instructions", "xrefs", "trace-native-values", "inspect-analysis-view", "--provider", "ghidra", "--json", "--snapshot"], { output_interpretation: "JSON observations include pseudocode, instructions, xrefs, or bounded value-flow. Success exit does not prove a vulnerability. Truncated or partial JSON is inconclusive.", composition_flow: "file/hash sample -> rea analyze --provider ghidra --json -> rea function/decompile/xrefs as needed -> inspect-analysis-view on saved views -> Evidence/Fact via Control API", evidence_retention: ["sample SHA-256", "rea-agents 6.4.0", "Ghidra 12.1.4", "image digest", "redacted argv", "stdout JSON", "stderr", "exit code", "truncation flags"], version_limits_side_effects_cleanup: "Pinned to rea-agents@6.4.0 / gitHead a56f7bb668ab23fec8d33f7af353ac7ed2fe1895. Snapshot files are exact-query caches, not persistent Ghidra databases. Keep workspace-local outputs; delete ephemeral provider temps after evidence retention.", verification_status: "source_declared_unexecuted", verification_note: "PR1 wires pins and manuals; real REA/Ghidra sample runs remain a follow-up acceptance item." }),
+  def(imageKey, "reverse-env", "image helper", "deploy/reverse-env.sh", ["reverse-env.sh", "/opt/deepsonar/bin/reverse-env.sh"], "Verify REA, Ghidra, JDK 21, and Node >= 22.19 before analysis.", "Run --check after sandbox start or when doctor reports provider issues.", "reverse-env.sh --check", ["--check"]),
+  capability(imageKey, "reverse-rea-selection", "rea-agents 6.4.0 / Ghidra 12.1.4 / JDK 21", "deploy/Dockerfile.agent-reverse#inline manifest", ["rea", "analyzeHeadless", "java"], "Choose REA CLI subcommands for native overview, function dossier, pseudocode, xrefs, or bounded value-flow under Ghidra.", "Prefer REA over raw analyzeHeadless for governed JSON Evidence. Do not use this image for APK device protocols (use mobile) or light .so metadata alone (mobile radare2/LIEF may suffice).", "reverse-env.sh --check -> rea analyze SAMPLE --provider ghidra --json -> rea function SAMPLE SYM --provider ghidra --json", ["absolute sample path", "--provider ghidra", "--json", "optional --snapshot"], { composition_flow: "hash sample -> analyze/function -> optional decompile/xrefs/trace -> inspect-analysis-view -> Control API Evidence." })
+];
+
 images.push(makeImage("deepsonar-mobile", ["agent-harness/mobile-runtime.json", "deploy/Dockerfile.agent-mobile", "deploy/mobile-env.sh", "deploy/mobile-adb.sh", "deploy/mobile-hdc.sh", "deploy/mobile-ios.sh", "deploy/mobile-hap.sh", "deploy/mobile-so.sh", "deploy/mobile-apkcheckpack-bin.sh"], ["deepsonar-base"], [...commonBase("deepsonar-mobile"), ...mobileDefs("deepsonar-mobile")], ["inherited base tools", "Android package analysis", "Android/OpenHarmony/iOS device operations", "Frida/Objection", "native .so analysis"]));
+images.push(makeImage("deepsonar-reverse", ["agent-harness/reverse-runtime.json", "deploy/Dockerfile.agent-reverse", "deploy/reverse-env.sh", "skills/deepsonar-rea-cli/SKILL.md"], ["deepsonar-base"], [...commonBase("deepsonar-reverse"), ...reverseDefs("deepsonar-reverse")], ["inherited base tools", "REA CLI", "Ghidra headless", "JDK 21"]));
+
 
 const expectedImages = [
   "deepsonar-base", "deepsonar-audit", "deepsonar-kali-minimal",
   "deepsonar-chrome-test", "deepsonar-chrome-audit", "deepsonar-chrome-fuzz",
   "deepsonar-clickhouse-audit", "deepsonar-clickhouse-test", "deepsonar-clickhouse-fuzz",
   "deepsonar-openharmony-test", "deepsonar-openharmony-audit", "deepsonar-openharmony-fuzz",
-  "deepsonar-mobile"
+  "deepsonar-mobile",
+  "deepsonar-reverse"
 ];
 if (images.length !== expectedImages.length || expectedImages.some((key, i) => images[i].image_key !== key)) {
   throw new Error(`image coverage mismatch: expected ${expectedImages.length}, got ${images.length}`);
@@ -417,7 +429,7 @@ for (const image of images) {
 
 const catalog = {
   schema: "deepsonar.runtime-manual-catalog/v1",
-  catalog_version: "2026-09-17",
+  catalog_version: "2026-10-12",
   generated_by: "agent-harness/runtime-manuals/generate-catalog.mjs",
   delivery_path: "/opt/deepsonar/manuals",
   failure_categories: Object.keys(FAILURE),

@@ -128,3 +128,11 @@ for (const imageKey of [
 }
 
 console.log("OK: runtime policy selection, role-scoped evidence, manuals injection, and idempotence");
+
+const reversePolicy = withRuntimeTestToolchainPolicy("audit", null, "deepsonar-reverse") ?? "";
+if (!reversePolicy.includes("Reverse / REA+Ghidra runtime")) {
+  throw new Error("reverse specialty policy missing");
+}
+if (!reversePolicy.includes("binary.rea.cli") && !reversePolicy.includes("rea-agents@6.4.0")) {
+  throw new Error("reverse policy missing REA pin guidance");
+}

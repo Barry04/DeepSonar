@@ -5,7 +5,7 @@
  * Injection rule (withRuntimeTestToolchainPolicy):
  * - Runtime test toolchain block: role `test`, or `verify` when image is not deepsonar-base.
  * - Specialty image boundary: ANY role when resolved image_key is in SPECIALTY_RUNTIME_IMAGE_POLICIES
- *   (chrome-*, clickhouse-*, openharmony-*, mobile). Base / audit / kali alone do not get a specialty block.
+ *   (chrome-*, clickhouse-*, openharmony-*, mobile, reverse). Base / audit / kali alone do not get a specialty block.
  */
 
 export const OPENHARMONY_HDC_POLICY = `### OpenHarmony hdc device protocol (Scheduler policy)
@@ -96,6 +96,16 @@ export type SpecialtyRuntimeImagePolicy = {
 };
 
 /** Known official specialty images that receive Scheduler AGENTS.md boundary injection for any role. */
+
+export const REVERSE_RUNTIME_POLICY = `### Reverse / REA+Ghidra runtime (Scheduler policy)
+
+This Job uses deepsonar-reverse. Deep native analysis must come from the pinned REA CLI (rea-agents@6.4.0) with Ghidra 12.1.4 and the full JDK 21 in this image.
+
+- Read /opt/deepsonar/manuals/INDEX.md for tool usage manuals (when/how/failure/evidence), then /opt/deepsonar/tool-manifest.json. Confirm GHIDRA_INSTALL_DIR and JAVA_HOME before first use. Prefer governed capability id binary.rea.cli.
+- CLI-only: do not register MCP, do not start a resident REA service, do not install Hopper/IDA, and do not apt/npm install analysis engines inside the job.
+- Pseudocode and static value flow are observations for Evidence/Fact only — never original source, dynamic proof, or a verified vulnerability. Partial, truncated, cancelled, or timed-out results must not be described as success.
+- If REA/Ghidra/native decompiler is unavailable, report the blocker using the role-scoped runtime evidence policy below. Never invent decompilation results from binutils/radare2 narration.`;
+
 export const SPECIALTY_RUNTIME_IMAGE_POLICIES: ReadonlyArray<SpecialtyRuntimeImagePolicy> = Object.freeze([
   { image_key: "deepsonar-chrome-test", marker: "### Chrome CDP runtime (Scheduler policy)", body: CHROME_TEST_RUNTIME_POLICY },
   { image_key: "deepsonar-chrome-audit", marker: "### Chrome/C++ audit toolchain (Scheduler policy)", body: CHROME_AUDIT_RUNTIME_POLICY },
@@ -107,6 +117,7 @@ export const SPECIALTY_RUNTIME_IMAGE_POLICIES: ReadonlyArray<SpecialtyRuntimeIma
   { image_key: "deepsonar-openharmony-audit", marker: "### OpenHarmony host audit toolchain (Scheduler policy)", body: OPENHARMONY_AUDIT_RUNTIME_POLICY },
   { image_key: "deepsonar-openharmony-fuzz", marker: "### OpenHarmony host fuzz toolchain (Scheduler policy)", body: OPENHARMONY_FUZZ_RUNTIME_POLICY },
   { image_key: "deepsonar-mobile", marker: "### Mobile device protocols (Scheduler policy)", body: MOBILE_RUNTIME_POLICY },
+  { image_key: "deepsonar-reverse", marker: "### Reverse / REA+Ghidra runtime (Scheduler policy)", body: REVERSE_RUNTIME_POLICY },
 ]);
 
 const SPECIALTY_BY_KEY = new Map(SPECIALTY_RUNTIME_IMAGE_POLICIES.map((item) => [item.image_key, item]));

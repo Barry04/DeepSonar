@@ -2,7 +2,7 @@
 
 > **状态：as-built**（#588）。索引：[`README.md`](README.md)。镜像选择见 [`RUNTIME_ROLE_IMAGE_MATRIX.md`](RUNTIME_ROLE_IMAGE_MATRIX.md)，OCI 目录契约见 [`RUNTIME_IMAGE_REGISTRY_CONTRACT.md`](RUNTIME_IMAGE_REGISTRY_CONTRACT.md)。
 
-全部 13 个官方运行镜像都携带当前版本的完整工具手册，固定根目录为 `/opt/deepsonar/manuals/`。这份资料面向沙箱内 Worker，可在断网环境读取；宿主仓库文档和外部网站不属于运行时依赖。
+全部 14 个官方运行镜像都携带当前版本的完整工具手册，固定根目录为 `/opt/deepsonar/manuals/`。这份资料面向沙箱内 Worker，可在断网环境读取；宿主仓库文档和外部网站不属于运行时依赖。
 
 ## 镜像内契约
 
@@ -29,7 +29,7 @@ pnpm ci:images
 node agent-harness/test-runtime-manuals-runtime.mjs <image-ref> <image-key>
 ```
 
-仓库级门禁检查 13 个镜像、必填章节、工具和包装入口覆盖、禁止空泛引用以及 Dockerfile 集成。运行时门禁用 `--network none`、丢弃 capabilities 和 `no-new-privileges` 启动实际镜像，重算摘要，并确认全部文档在镜像内物理可读。依赖真机、外部服务或联网下载的示例必须在条目中标为 `device_required`、`service_required` 或 `unverified`，不得标成实测成功。
+仓库级门禁检查 14 个镜像、必填章节、工具和包装入口覆盖、禁止空泛引用以及 Dockerfile 集成。运行时门禁用 `--network none`、丢弃 capabilities 和 `no-new-privileges` 启动实际镜像，重算摘要，并确认全部文档在镜像内物理可读。依赖真机、外部服务或联网下载的示例必须在条目中标为 `device_required`、`service_required` 或 `unverified`，不得标成实测成功。
 
 ## Language-server capability modules
 
