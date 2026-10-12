@@ -152,13 +152,28 @@ try {
   runBash(maybeSkipScript, [], {
       SKIP: "true",
       SOURCE_DIGEST: digest,
-      IMAGE_KEY: "deepsonar-base",
+      IMAGE_NAME: "ghcr.io/summersec/deepsonar-base",
       PREVIOUS_REGISTRY: catalogPath,
       GITHUB_OUTPUT: githubOutputHit,
       GITHUB_STEP_SUMMARY: summaryHit,
   });
   assert.match(readFileSync(summaryHit, "utf8"), /version kept/);
   assert.match(readFileSync(githubOutputHit, "utf8"), new RegExp(`digest=${digest}`));
+
+  const freshOutput = path.join(temp, "github-output-fresh");
+  try {
+    runBash(maybeSkipScript, [], {
+        SKIP: "false",
+        SOURCE_DIGEST: digest,
+        IMAGE_NAME: "ghcr.io/summersec/deepsonar-base",
+        PREVIOUS_REGISTRY: catalogPath,
+        GITHUB_OUTPUT: freshOutput,
+    });
+    assert.fail("fresh builds must continue to version-tag publication");
+  } catch (error) {
+    assert.equal(error.status, 1);
+    assert.equal(existsSync(freshOutput), false);
+  }
 
   try {
     runBash(maybeSkipScript, [], {

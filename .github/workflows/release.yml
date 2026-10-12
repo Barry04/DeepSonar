@@ -1760,7 +1760,6 @@ jobs:
           IMAGE_NAME: ${{ steps.release.outputs.image_name }}
           SKIP: ${{ steps.resolve.outputs.skip }}
           SOURCE_DIGEST: ${{ steps.resolve.outputs.digest }}
-          REUSE_DIGEST: ${{ steps.resolve.outputs.digest }}
           FINGERPRINT: ${{ steps.fingerprint.outputs.fingerprint }}
           SRC_TAG: ${{ steps.fingerprint.outputs.src_tag }}
           AMD64_DIGEST: ${{ steps.build-amd64.outputs.digest }}
@@ -1841,68 +1840,69 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           }
 
+          if bash agent-harness/maybe-skip-runtime-version-tags.sh; then exit 0; fi
           if [[ "$SKIP" == "true" ]]; then
-            echo "image build unchanged; version kept" >> "$GITHUB_STEP_SUMMARY"
-            printf 'digest=%s\n' "$REUSE_DIGEST" >> "$GITHUB_OUTPUT"
-            exit 0
+            source_refs=("${IMAGE_NAME}@${SOURCE_DIGEST}")
           else
             source_refs=(
               "${IMAGE_NAME}@${AMD64_DIGEST}"
               "${IMAGE_NAME}@${ARM64_DIGEST}"
             )
-            annotation_args=(
-              --annotation "index:org.opencontainers.image.title=DeepSonar Kali Test"
-              --annotation "index:org.opencontainers.image.description=DeepSonar Test 默认使用的精简 Kali 多语言工具链；不安装 Kali metapackage 或 GUI。"
-              --annotation "index:org.opencontainers.image.source=https://github.com/SummerSec/DeepSonar"
-              --annotation "index:org.opencontainers.image.documentation=https://github.com/SummerSec/DeepSonar/blob/main/docs/RELEASE_RUNTIME_IMAGES.md"
-              --annotation "index:org.opencontainers.image.licenses=LicenseRef-DeepSonar-Proprietary"
-            )
-            if [[ "$ACR_CONFIGURED" == "true" ]]; then
-              acr_tag_args=()
-              while IFS= read -r tag; do
-                [[ -n "$tag" ]] || continue
-                acr_tag_args+=(-t "$tag")
-              done <<< "${ACR_TAGS:-}"
-              [[ ${#acr_tag_args[@]} -gt 0 ]]
-              retry_imagetools_create "${annotation_args[@]}" "${acr_tag_args[@]}" "${source_refs[@]}"
-            fi
-            ghcr_tag_args=()
+          fi
+          annotation_args=(
+            --annotation "index:org.opencontainers.image.title=DeepSonar Kali Test"
+            --annotation "index:org.opencontainers.image.description=DeepSonar Test 默认使用的精简 Kali 多语言工具链；不安装 Kali metapackage 或 GUI。"
+            --annotation "index:org.opencontainers.image.source=https://github.com/SummerSec/DeepSonar"
+            --annotation "index:org.opencontainers.image.documentation=https://github.com/SummerSec/DeepSonar/blob/main/docs/RELEASE_RUNTIME_IMAGES.md"
+            --annotation "index:org.opencontainers.image.licenses=LicenseRef-DeepSonar-Proprietary"
+          )
+          if [[ "$ACR_CONFIGURED" == "true" ]]; then
+            acr_tag_args=()
             while IFS= read -r tag; do
               [[ -n "$tag" ]] || continue
-              ghcr_tag_args+=(-t "$tag")
-            done <<< "$GHCR_TAGS"
-            [[ ${#ghcr_tag_args[@]} -gt 0 ]]
-            docker buildx imagetools create "${annotation_args[@]}" "${ghcr_tag_args[@]}" "${source_refs[@]}"
-            # 取 GHCR 首个标签的 multi-arch index digest
-            primary="$(printf '%s\n' "$GHCR_TAGS" | sed '/^$/d' | head -n1)"
-            # Inspect the GHCR destination before copying to another registry.
-            # The Docker Hub source must be immutable; a mutable tag could move
-            # between the GHCR publish and the cross-registry copy.
-            digest="$(docker buildx imagetools inspect "$primary" \
-              | sed -nE 's/^[[:space:]]*Digest:[[:space:]]*(sha256:[0-9a-f]{64}).*/\1/p' \
-              | head -n1)"
-            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-            immutable_primary="${primary}@${digest}"
-            if [[ -n "${DOCKERHUB_TAGS:-}" ]]; then
-              dockerhub_tag_args=()
-              while IFS= read -r tag; do
-                [[ -n "$tag" ]] || continue
-                dockerhub_tag_args+=(-t "$tag")
-              done <<< "$DOCKERHUB_TAGS"
-              [[ ${#dockerhub_tag_args[@]} -gt 0 ]]
-              if ! retry_imagetools_create "${annotation_args[@]}" "${dockerhub_tag_args[@]}" "$immutable_primary"; then
-                echo "::warning::Docker Hub 标签发布失败；记录步骤将把本次 release 标记为失败。"
-                echo "Docker Hub 标签复制重试耗尽；record-runtime-image-digest 将拒绝生成未验证清单。" >> "$GITHUB_STEP_SUMMARY"
-                exit 1
-              fi
-            fi
-            DIGEST="$digest" bash agent-harness/resolve-image-src-cache.sh pin
-            printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
-            {
-              printf 'primary=%s\n' "$primary"
-              printf 'digest=%s\n' "$digest"
-            } >> "$GITHUB_STEP_SUMMARY"
+              acr_tag_args+=(-t "$tag")
+            done <<< "${ACR_TAGS:-}"
+            [[ ${#acr_tag_args[@]} -gt 0 ]]
+            retry_imagetools_create "${annotation_args[@]}" "${acr_tag_args[@]}" "${source_refs[@]}"
           fi
+          ghcr_tag_args=()
+          while IFS= read -r tag; do
+            [[ -n "$tag" ]] || continue
+            ghcr_tag_args+=(-t "$tag")
+          done <<< "$GHCR_TAGS"
+          [[ ${#ghcr_tag_args[@]} -gt 0 ]]
+          docker buildx imagetools create "${annotation_args[@]}" "${ghcr_tag_args[@]}" "${source_refs[@]}"
+          # 取 GHCR 首个标签的 multi-arch index digest
+          primary="$(printf '%s\n' "$GHCR_TAGS" | sed '/^$/d' | head -n1)"
+          # Inspect the GHCR destination before copying to another registry.
+          # The Docker Hub source must be immutable; a mutable tag could move
+          # between the GHCR publish and the cross-registry copy.
+          digest="$(docker buildx imagetools inspect "$primary" \
+            | sed -nE 's/^[[:space:]]*Digest:[[:space:]]*(sha256:[0-9a-f]{64}).*/\1/p' \
+            | head -n1)"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          immutable_primary="${primary}@${digest}"
+          if [[ -n "${DOCKERHUB_TAGS:-}" ]]; then
+            dockerhub_tag_args=()
+            while IFS= read -r tag; do
+              [[ -n "$tag" ]] || continue
+              dockerhub_tag_args+=(-t "$tag")
+            done <<< "$DOCKERHUB_TAGS"
+            [[ ${#dockerhub_tag_args[@]} -gt 0 ]]
+            if ! retry_imagetools_create "${annotation_args[@]}" "${dockerhub_tag_args[@]}" "$immutable_primary"; then
+              echo "::warning::Docker Hub 标签发布失败；记录步骤将把本次 release 标记为失败。"
+              echo "Docker Hub 标签复制重试耗尽；record-runtime-image-digest 将拒绝生成未验证清单。" >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+          fi
+          if [[ "$SKIP" != "true" ]]; then
+            DIGEST="$digest" bash agent-harness/resolve-image-src-cache.sh pin
+          fi
+          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+          {
+            printf 'primary=%s\n' "$primary"
+            printf 'digest=%s\n' "$digest"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: 保存运行时 manifest digest
         env:
           IMAGE_KEY: deepsonar-kali-minimal
