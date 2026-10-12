@@ -4,6 +4,12 @@
 ARG BASE_IMAGE=deepsonar-base:local
 ARG DEBIAN_SNAPSHOT=20260731T162426Z
 ARG DEBIAN_SECURITY_SNAPSHOT=20260731T162426Z
+# base 镜像的 python3.11 家族跟随 Debian 安全更新前移（libpython3.11-stdlib 的点版本会变），
+# 而本镜像把 APT 源钉在快照上：afl++ 依赖 libpython3.11，快照中的该包与
+# libpython3.11-stdlib 是同一点版本，与 base 已装的更新点版本互斥 → apt-get install 以
+# `Unable to correct problems, you have held broken packages` 失败（v0.5.1 release 实测
+# exit 100）。故 python 家族按快照点版本显式钉死并允许降级，保证镜像内部自洽。
+ARG PYTHON_SNAPSHOT_VERSION=3.11.2-6+deb12u8
 ARG V8_REPOSITORY=https://chromium.googlesource.com/v8/v8.git
 ARG V8_COMMIT=792d9716fea48312ad7ce4413c538e00628b1d50
 ARG V8_VERSION=15.1.206.10
@@ -31,6 +37,7 @@ RUN set -eux; \
 FROM ${BASE_IMAGE} AS runtime-rootfs
 ARG DEBIAN_SNAPSHOT
 ARG DEBIAN_SECURITY_SNAPSHOT
+ARG PYTHON_SNAPSHOT_VERSION
 ARG TARGETARCH
 
 USER root
@@ -39,8 +46,11 @@ RUN set -eux; \
   printf 'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/%s bookworm main\n' "$DEBIAN_SNAPSHOT" >/etc/apt/sources.list; \
   printf 'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/%s bookworm-security main\n' "$DEBIAN_SECURITY_SNAPSHOT" >>/etc/apt/sources.list; \
   apt-get update; \
-  apt-get install -y --no-install-recommends \
-    ca-certificates curl file git pkg-config clang-16 lld-16 llvm-16 libclang-rt-16-dev libfuzzer-16-dev afl++ binutils ninja-build python3; \
+  apt-get install -y --no-install-recommends --allow-downgrades \
+    ca-certificates curl file git pkg-config clang-16 lld-16 llvm-16 libclang-rt-16-dev libfuzzer-16-dev afl++ binutils ninja-build \
+    python3.11=${PYTHON_SNAPSHOT_VERSION} python3.11-minimal=${PYTHON_SNAPSHOT_VERSION} \
+    libpython3.11=${PYTHON_SNAPSHOT_VERSION} libpython3.11-stdlib=${PYTHON_SNAPSHOT_VERSION} \
+    libpython3.11-minimal=${PYTHON_SNAPSHOT_VERSION}; \
   rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* \
     /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
   install -d -m 0755 /opt/deepsonar/bin /opt/deepsonar/lib /workspace

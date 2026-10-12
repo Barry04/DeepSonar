@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-12
+
+### 修复
+
+- 修复 fuzz 运行时镜像构建退出 100（#713 follow-up）：`chrome-fuzz` / `clickhouse-fuzz` 把 `python3.11`、`python3.11-minimal`、`libpython3.11`、`libpython3.11-stdlib`、`libpython3.11-minimal` 按 `ARG PYTHON_SNAPSHOT_VERSION` 显式钉到 Debian 快照点版本并允许降级。base 镜像的 python3.11 家族跟随 Debian 安全更新前移，而这两个镜像把 APT 源钉在快照上：`afl++` 依赖 `libpython3.11`，快照中的该包严格要求同点版本的 `libpython3.11-stdlib`，与 base 已装的更新点版本互斥 → `apt-get install` 以 `Unable to correct problems, you have held broken packages` 失败。v0.5.1 release 中这两条构建（各 amd64/arm64）因此全挂，`chrome-images` / `clickhouse-images` 与 `release` job 随之被跳过，未生成 GitHub Release 与镜像清单。修复后镜像内部按快照自洽；`check-runtime-image-consistency.mjs` 增加断言，缺钉死或缺 `--allow-downgrades` 时直接失败。不 bump schema，控制面镜像与其他运行时镜像定义未变。
+
 ## [0.5.1] - 2026-10-10
 
 ### 新增
@@ -1076,6 +1082,7 @@
 
 - The bundled runtime registry was synchronized for the `v0.1.18` release.
 
+[0.5.2]: https://github.com/SummerSec/DeepSonar/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/SummerSec/DeepSonar/compare/v0.4.11...v0.5.1
 [0.4.11]: https://github.com/SummerSec/DeepSonar/compare/v0.4.10...v0.4.11
 [0.4.10]: https://github.com/SummerSec/DeepSonar/compare/v0.4.9...v0.4.10

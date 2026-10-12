@@ -654,6 +654,18 @@ for (const arch of ["amd64", "arm64"]) {
   expect(clickhouseTestDockerfile.includes(asset?.url ?? "") && clickhouseTestDockerfile.includes(asset?.sha256 ?? ""), `ClickHouse ${arch} pin missing from Test Dockerfile`);
   expect(clickhouseFuzzDockerfile.includes(asset?.url ?? "") && clickhouseFuzzDockerfile.includes(asset?.sha256 ?? ""), `ClickHouse ${arch} pin missing from Fuzz Dockerfile`);
 }
+// v0.5.1 release 实测（apt exit 100，chrome-fuzz / clickhouse-fuzz 四条构建全挂、release job
+// 随之被跳过）：base 镜像的 python3.11 家族跟随 Debian 安全更新前移，而这两个镜像把 APT 源钉在
+// 快照上；afl++ 依赖 libpython3.11，快照中的它严格要求同点版本的 libpython3.11-stdlib，而 base
+// 已装的是更新的点版本 → apt 无法同时满足（No downgrade）→ 构建失败。故 python 家族必须显式
+// 钉到快照点版本并允许降级，保证镜像内部自洽。
+for (const [label, fuzzDockerfile] of [["Chrome Fuzz", chromeFuzzDockerfile], ["ClickHouse Fuzz", clickhouseFuzzDockerfile]]) {
+  expect(fuzzDockerfile.includes("ARG PYTHON_SNAPSHOT_VERSION="), `${label} must pin the snapshot python point release`);
+  expect(fuzzDockerfile.includes("--allow-downgrades"), `${label} must allow downgrading the python family to the pinned snapshot version`);
+  for (const pythonPackage of ["python3.11", "python3.11-minimal", "libpython3.11", "libpython3.11-stdlib", "libpython3.11-minimal"]) {
+    expect(fuzzDockerfile.includes(`${pythonPackage}=\${PYTHON_SNAPSHOT_VERSION}`), `${label} must pin ${pythonPackage} to the snapshot point release`);
+  }
+}
 expect(clickhouseInstall.includes("https://github.com/ClickHouse/ClickHouse/releases/download/") && clickhouseInstall.includes("sha256sum -c -") && clickhouseInstall.includes("*/usr/bin/clickhouse") && clickhouseInstall.includes("file -Lb"), "ClickHouse install must accept only official GitHub Release URLs, verify SHA256, and install the ELF usr/bin/clickhouse");
 expect(!clickhouseInstall.includes("packages.clickhouse.com") && !clickhouseInstall.includes("repo.clickhouse.com"), "ClickHouse install must not use the apt/repo mirror");
 expect(clickhouseAuditEnv.includes("git --version") && clickhouseAuditDockerfile.includes("git") && clickhouseAuditDockerfile.includes("cmake") && clickhouseAuditDockerfile.includes("ninja-build") && clickhouseAuditDockerfile.includes("clang") && clickhouseAuditDockerfile.includes("binutils"), "ClickHouse Audit must keep git, CMake/Ninja, Clang and binutils");
