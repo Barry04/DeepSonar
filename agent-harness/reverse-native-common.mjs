@@ -59,3 +59,28 @@ export function assertEvidence(evidence, { operation, sample, evidenceSchema }) 
   ghidraProfile(evidence);
   return evidence.normalized_result;
 }
+/** Search names are discovery only. Later selectors must use provider-returned entry addresses. */
+export function exactProcedureAddresses(results, name) {
+  assert(Array.isArray(results), 'procedure search must return an inventory');
+  const hits=results.filter(item=>item.value===name);
+  for (const hit of hits) assert.match(hit.address,/^0x[0-9a-f]+$/, 'fixture procedure entry must be a canonical address');
+  const addresses=[...new Set(hits.map(hit=>hit.address))].sort();
+  assert(addresses.length>0, `no exact procedure named ${name}`);
+  return addresses;
+}
+/** Do not silently choose the first symbol, a PLT thunk, an external, or an unknown identity. */
+export function selectUniqueFixtureProcedure(procedures, name) {
+  assert(Array.isArray(procedures), 'procedure candidates must be an inventory');
+  for (const procedure of procedures) {
+    assert.equal(procedure.name,name,'candidate procedure name differs from exact search');
+    assert.match(procedure.address,/^0x[0-9a-f]+$/, 'fixture procedure entry must be a canonical address');
+    assert.equal(typeof procedure.classification?.external,'boolean','unknown external classification');
+    assert.equal(typeof procedure.classification?.thunk,'boolean','unknown thunk classification');
+    assert.equal(procedure.classification.provenance,'ghidra-function-manager','classification must be Ghidra-backed');
+  }
+  const implementations=procedures.filter(procedure=>!procedure.classification.external&&!procedure.classification.thunk);
+  assert.equal(implementations.length,1,`expected one nonexternal/nonthunk implementation of ${name}; found ${implementations.length}`);
+  const selected=implementations[0];
+  assert(selected.body?.available===true && selected.body.contains_entry===true && selected.body.total_bytes>0 && selected.body.ranges?.length>0,'selected fixture implementation must have a complete analyzed body');
+  return selected;
+}

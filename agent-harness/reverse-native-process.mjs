@@ -9,7 +9,7 @@ export const sanitizeProcess = ({pid,comm,state,ppid,pgid,start}) => ({pid,comm,
 export function commandFailureSummary(output) {
   let document;
   try { document=JSON.parse(output); } catch { return 'unstructured command failure; inspect retained stdout/stderr artifacts'; }
-  const codes=new Set(['execution_failure','capability_unavailable','invalid_input','cancelled','timeout','not_found','configuration_error']);
+  const codes=new Set(['execution_failure','capability_unavailable','invalid_input','invalid_request','cancelled','timeout','not_found','configuration_error']);
   const causes=new Set(['GhidraLaunchError','AnalysisCapabilityUnavailableError','AnalysisCancelledError']);
   const code=document?.code ?? document?.error?.code;
   const cause=document?.details?.diagnostics?.failure_cause?.name;

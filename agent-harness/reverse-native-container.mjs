@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { assertEvidence, ghidraProfile, sha256 } from './reverse-native-common.mjs';
+import { assertEvidence, ghidraProfile, sha256, exactProcedureAddresses, selectUniqueFixtureProcedure } from './reverse-native-common.mjs';
 import { nativeArch, supportedNodeVersion } from './reverse-toolchain-check.mjs';
 import { measuredCommand, cgroupMemory, processTable, providerProcesses, sanitizeProcess } from './reverse-native-process.mjs';
 
@@ -55,7 +55,7 @@ try {
   const dossier=result=>{
     assert(functionDossierSchema.safeParse(result).success,'invalid function dossier');
     assert(result.pseudocode.length>0 && result.assembly.length>0,'missing native pseudocode/assembly');
-    assert.match(result.procedure.name,/vulnerable_copy/);
+    selectUniqueFixtureProcedure([result.procedure],'vulnerable_copy');
   };
   const elf=samples.find(sample=>sample.name==='sample_elf');
   const snapshot=join(directory,'elf-snapshot.json');
@@ -91,7 +91,20 @@ try {
   assert(view.normalized_result.item.operations>0,'native value-flow view has no operations');
   for (const sample of samples.filter(sample=>sample!==elf)) {
     overview((await execute(`${sample.name}_analyze`,sample,'analyze',null,'binary_overview')).result);
-    dossier((await execute(`${sample.name}_function`,sample,'function','vulnerable_copy','analyze_function')).result);
+    const search=await execute(`${sample.name}_search_procedure`,sample,'search','vulnerable_copy','search_procedures',['--kind','procedures','--mode','literal','--case-sensitive']);
+    const candidates=[];
+    for (const [index,address] of exactProcedureAddresses(search.result,'vulnerable_copy').entries()) {
+      const candidate=await execute(`${sample.name}_candidate_${index}_function`,sample,'function',address,'analyze_function');
+      assert(functionDossierSchema.safeParse(candidate.result).success,'invalid candidate function dossier');
+      assert.equal(candidate.result.procedure.address,address,'candidate function entry differs from search address');
+      candidates.push(candidate);
+    }
+    const selected=selectUniqueFixtureProcedure(candidates.map(candidate=>candidate.result.procedure),'vulnerable_copy');
+    const fn=candidates.find(candidate=>candidate.result.procedure.address===selected.address);
+    dossier(fn.result);
+    report.procedure_selections??=[];
+    report.procedure_selections.push({sample:sample.name,name:selected.name,address:selected.address,search_evidence_id:search.value.evidence_id,candidate_evidence_ids:candidates.map(candidate=>candidate.value.evidence_id),selected_evidence_id:fn.value.evidence_id,classification:selected.classification,body:selected.body});
+    save();
   }
   report.checks.commands=true; save();
   // No snapshot; a distinct source path guarantees a new Ghidra import to interrupt.

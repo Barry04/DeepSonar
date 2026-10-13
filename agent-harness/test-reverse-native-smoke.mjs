@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { supportedNodeVersion, verifyIntegrity, verifyElfArchitecture, nativeArch } from './reverse-toolchain-check.mjs';
-import { assertNativePlatform, ghidraProfile, SIZE_CEILING_MIB, LIMITS } from './reverse-native-common.mjs';
+import { assertNativePlatform, ghidraProfile, SIZE_CEILING_MIB, LIMITS, exactProcedureAddresses, selectUniqueFixtureProcedure } from './reverse-native-common.mjs';
 import { processTable, providerProcesses, sanitizeProcess, trackOwnedProcesses, rawOutputCapture, isGhidraAnalysisProcess, ghidraAnalysisStarted, remainingProcesses, commandFailureSummary } from './reverse-native-process.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
@@ -96,11 +96,38 @@ test('failure summaries expose only whitelisted structured REA codes and causes'
   assert.equal(commandFailureSummary(JSON.stringify(artifact)),'REA execution_failure; GhidraLaunchError; inspect retained stdout/stderr artifacts');
   assert.equal(commandFailureSummary(JSON.stringify({error:{code:'cancelled'},details:{diagnostics:{failure_cause:{name:'AnalysisCancelledError'}}}})),'REA cancelled; AnalysisCancelledError; inspect retained stdout/stderr artifacts');
   assert.equal(commandFailureSummary(JSON.stringify({code:'capability_unavailable',details:{diagnostics:{failure_cause:{name:'AnalysisCapabilityUnavailableError'}}}})),'REA capability_unavailable; AnalysisCapabilityUnavailableError; inspect retained stdout/stderr artifacts');
+  assert.equal(commandFailureSummary(JSON.stringify({code:'invalid_request',category:'invalid_input'})),'REA invalid_request; inspect retained stdout/stderr artifacts');
   for (const output of ['token=private-value','{invalid JSON',JSON.stringify({code:'token=private-value',details:{diagnostics:{failure_cause:{name:'private-name',message:'token=private-value'}}}})]) {
     const summary=commandFailureSummary(output);
     assert(!summary.includes('private')); assert(!summary.includes('token=')); assert(summary.includes('retained stdout/stderr artifacts'));
   }
   assert(!commandFailureSummary(JSON.stringify(artifact)).includes('/tmp/'));
+});
+test('fixture procedure selection uses exact search addresses and one Ghidra-backed implementation',()=>{
+  const name='vulnerable_copy';
+  const implementation={address:'0x1011b1',name,classification:{external:false,thunk:false,thunk_target:null,provenance:'ghidra-function-manager'},body:{available:true,contains_entry:true,total_bytes:53,ranges:[{start:'0x1011b1',end:'0x1011e5'}]}};
+  const thunk={...implementation,address:'0x1010d0',classification:{...implementation.classification,thunk:true,thunk_target:implementation.address}};
+  const external={...implementation,address:'0x105000',classification:{...implementation.classification,external:true},body:{available:false}};
+  const hits=[{address:thunk.address,value:name},{address:implementation.address,value:name},{address:'0x2000',value:'vulnerable_copy_suffix'}];
+  assert.deepEqual(exactProcedureAddresses(hits,name),[thunk.address,implementation.address]);
+  assert.equal(selectUniqueFixtureProcedure([thunk,external,implementation],name),implementation);
+  assert.equal(selectUniqueFixtureProcedure([implementation,external,thunk],name),implementation);
+  // Both original CI .so files were independently inspected with pinned Ghidra 12.1.4.
+  // amd64: thunk 0x1010d0 -> 0x1011b1; arm64: thunk 0x100620 -> 0x100758.
+  // These addresses belong only to the regression fixture, never to runtime selection.
+  const armImplementation={...implementation,address:'0x100758',body:{...implementation.body,total_bytes:44,ranges:[{start:'0x100758',end:'0x100783'}]}};
+  const armThunk={...thunk,address:'0x100620',classification:{...thunk.classification,thunk_target:armImplementation.address}};
+  assert.deepEqual(exactProcedureAddresses([{address:armThunk.address,value:name},{address:armImplementation.address,value:name}],name),[armThunk.address,armImplementation.address]);
+  assert.equal(selectUniqueFixtureProcedure([armThunk,armImplementation],name),armImplementation);
+  assert.equal(selectUniqueFixtureProcedure([armImplementation,armThunk],name),armImplementation);
+  assert.throws(()=>exactProcedureAddresses([{address:'0x2000',value:'vulnerable_copy_suffix'}],name),/no exact procedure/);
+  assert.throws(()=>exactProcedureAddresses([{address:'vulnerable_copy',value:name}],name),/canonical address/);
+  assert.throws(()=>selectUniqueFixtureProcedure([],name),/found 0/);
+  assert.throws(()=>selectUniqueFixtureProcedure([thunk,external],name),/found 0/);
+  assert.throws(()=>selectUniqueFixtureProcedure([implementation,{...implementation,address:'0x101300'}],name),/found 2/);
+  assert.throws(()=>selectUniqueFixtureProcedure([{...implementation,classification:null}],name),/unknown external classification/);
+  assert.throws(()=>selectUniqueFixtureProcedure([{...implementation,classification:{...implementation.classification,provenance:'unverified'}}],name),/Ghidra-backed/);
+  assert.throws(()=>selectUniqueFixtureProcedure([{...implementation,body:{...implementation.body,available:false}}],name),/complete analyzed body/);
 });
 test('public ELF and shared-library fixtures compile reproducibly with host gcc',{skip:process.platform!=='linux'?'native ELF compiler fixture check requires Linux':(!gccAvailable?'host gcc unavailable; mandatory Docker smoke never skips':false)},()=>{
   const temporary=mkdtempSync(join(tmpdir(),'reverse-fixture-unit-'));
