@@ -1038,30 +1038,38 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          amd64_unchanged="$(jq -r '.unchanged // false' "chrome-arch/${{ matrix.name }}-amd64.json")"
-          arm64_unchanged="$(jq -r '.unchanged // false' "chrome-arch/${{ matrix.name }}-arm64.json")"
-          if [[ "$amd64_unchanged" == "true" && "$arm64_unchanged" == "true" ]]; then
-            echo "image build unchanged; version kept" >> "$GITHUB_STEP_SUMMARY"
-            node agent-harness/reuse-catalog-descriptor.mjs \
-              --image-key "deepsonar-${{ matrix.name }}" \
-              --out "release-digests/${{ matrix.name }}.json"
-            digest="$(jq -r '.digest' "release-digests/${{ matrix.name }}.json")"
-            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-            printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
-            printf 'unchanged=true\n' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           amd64_digest="$(jq -r '.digest' "chrome-arch/${{ matrix.name }}-amd64.json")"
           arm64_digest="$(jq -r '.digest' "chrome-arch/${{ matrix.name }}-arm64.json")"
           [[ "$amd64_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
           [[ "$arm64_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-          amd64_source="${IMAGE_NAME}@${amd64_digest}"
-          arm64_source="${IMAGE_NAME}@${arm64_digest}"
-          mapfile -t amd64_sources < <(bash agent-harness/select-runtime-platform-sources.sh "$amd64_source" "linux/amd64")
-          mapfile -t arm64_sources < <(bash agent-harness/select-runtime-platform-sources.sh "$arm64_source" "linux/arm64")
-          [[ ${#amd64_sources[@]} -eq 1 ]]
-          [[ ${#arm64_sources[@]} -eq 1 ]]
-          source_refs=("${amd64_sources[0]}" "${arm64_sources[0]}")
+          platform_args=(
+            --source "linux/amd64=${IMAGE_NAME}@${amd64_digest}"
+            --source "linux/arm64=${IMAGE_NAME}@${arm64_digest}"
+          )
+          # Resolve before reuse; command substitution preserves inspect failures.
+          selected_sources_text="$(node agent-harness/runtime-platform-manifests.mjs "${platform_args[@]}")"
+          mapfile -t source_refs <<< "$selected_sources_text"
+          [[ ${#source_refs[@]} -eq 2 ]]
+          amd64_unchanged="$(jq -r '.unchanged // false' "chrome-arch/${{ matrix.name }}-amd64.json")"
+          arm64_unchanged="$(jq -r '.unchanged // false' "chrome-arch/${{ matrix.name }}-arm64.json")"
+          if [[ "$amd64_unchanged" == "true" && "$arm64_unchanged" == "true" ]]; then
+            if node agent-harness/reuse-catalog-descriptor.mjs \
+              --image-key "deepsonar-${{ matrix.name }}" \
+              "${platform_args[@]}" \
+              --out "release-digests/${{ matrix.name }}.json"; then
+              echo "image build unchanged; tested platform manifests match; version kept" >> "$GITHUB_STEP_SUMMARY"
+              digest="$(jq -r '.digest' "release-digests/${{ matrix.name }}.json")"
+              [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+              printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+              printf 'unchanged=true\n' >> "$GITHUB_OUTPUT"
+              exit 0
+            else
+              reuse_status=$?
+              # Only a proven identity miss may publish; inspect/errors abort.
+              [[ "$reuse_status" -eq 2 ]] || exit "$reuse_status"
+            fi
+            echo "cached children differ from previous catalog; assembling tested platform manifests" >> "$GITHUB_STEP_SUMMARY"
+          fi
           annotation_args=(
             --annotation "index:org.opencontainers.image.title=${{ matrix.title }}"
             --annotation "index:org.opencontainers.image.description=${{ matrix.description }}"
@@ -1493,30 +1501,38 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          amd64_unchanged="$(jq -r '.unchanged // false' "clickhouse-arch/${{ matrix.name }}-amd64.json")"
-          arm64_unchanged="$(jq -r '.unchanged // false' "clickhouse-arch/${{ matrix.name }}-arm64.json")"
-          if [[ "$amd64_unchanged" == "true" && "$arm64_unchanged" == "true" ]]; then
-            echo "image build unchanged; version kept" >> "$GITHUB_STEP_SUMMARY"
-            node agent-harness/reuse-catalog-descriptor.mjs \
-              --image-key "deepsonar-${{ matrix.name }}" \
-              --out "release-digests/${{ matrix.name }}.json"
-            digest="$(jq -r '.digest' "release-digests/${{ matrix.name }}.json")"
-            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-            printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
-            printf 'unchanged=true\n' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           amd64_digest="$(jq -r '.digest' "clickhouse-arch/${{ matrix.name }}-amd64.json")"
           arm64_digest="$(jq -r '.digest' "clickhouse-arch/${{ matrix.name }}-arm64.json")"
           [[ "$amd64_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
           [[ "$arm64_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-          amd64_source="${IMAGE_NAME}@${amd64_digest}"
-          arm64_source="${IMAGE_NAME}@${arm64_digest}"
-          mapfile -t amd64_sources < <(bash agent-harness/select-runtime-platform-sources.sh "$amd64_source" "linux/amd64")
-          mapfile -t arm64_sources < <(bash agent-harness/select-runtime-platform-sources.sh "$arm64_source" "linux/arm64")
-          [[ ${#amd64_sources[@]} -eq 1 ]]
-          [[ ${#arm64_sources[@]} -eq 1 ]]
-          source_refs=("${amd64_sources[0]}" "${arm64_sources[0]}")
+          platform_args=(
+            --source "linux/amd64=${IMAGE_NAME}@${amd64_digest}"
+            --source "linux/arm64=${IMAGE_NAME}@${arm64_digest}"
+          )
+          # Resolve before reuse; command substitution preserves inspect failures.
+          selected_sources_text="$(node agent-harness/runtime-platform-manifests.mjs "${platform_args[@]}")"
+          mapfile -t source_refs <<< "$selected_sources_text"
+          [[ ${#source_refs[@]} -eq 2 ]]
+          amd64_unchanged="$(jq -r '.unchanged // false' "clickhouse-arch/${{ matrix.name }}-amd64.json")"
+          arm64_unchanged="$(jq -r '.unchanged // false' "clickhouse-arch/${{ matrix.name }}-arm64.json")"
+          if [[ "$amd64_unchanged" == "true" && "$arm64_unchanged" == "true" ]]; then
+            if node agent-harness/reuse-catalog-descriptor.mjs \
+              --image-key "deepsonar-${{ matrix.name }}" \
+              "${platform_args[@]}" \
+              --out "release-digests/${{ matrix.name }}.json"; then
+              echo "image build unchanged; tested platform manifests match; version kept" >> "$GITHUB_STEP_SUMMARY"
+              digest="$(jq -r '.digest' "release-digests/${{ matrix.name }}.json")"
+              [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+              printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+              printf 'unchanged=true\n' >> "$GITHUB_OUTPUT"
+              exit 0
+            else
+              reuse_status=$?
+              # Only a proven identity miss may publish; inspect/errors abort.
+              [[ "$reuse_status" -eq 2 ]] || exit "$reuse_status"
+            fi
+            echo "cached children differ from previous catalog; assembling tested platform manifests" >> "$GITHUB_STEP_SUMMARY"
+          fi
           annotation_args=(
             --annotation "index:org.opencontainers.image.title=${{ matrix.title }}"
             --annotation "index:org.opencontainers.image.description=${{ matrix.description }}"
@@ -2875,6 +2891,8 @@ jobs:
     needs: [base-image, images, kali-minimal, openharmony-test, openharmony-audit, openharmony-fuzz, chrome-images, clickhouse-images, mobile]
     runs-on: ubuntu-latest
     env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       ALIYUN_REGISTRY: ${{ secrets.ALIYUN_REGISTRY }}
       ALIYUN_REGISTRY_NAMESPACE: ${{ secrets.ALIYUN_REGISTRY_NAMESPACE }}
       ALIYUN_REGISTRY_USERNAME: ${{ secrets.ALIYUN_REGISTRY_USERNAME }}
@@ -2901,6 +2919,37 @@ jobs:
           pattern: runtime-image-digest-*
           path: release-digests
           merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: chrome-arch-*
+          path: chrome-arch
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: clickhouse-arch-*
+          path: clickhouse-arch
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v3
+      - name: Login GHCR for final payload verification
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Login Docker Hub for final payload verification
+        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+      - name: Login Aliyun ACR for final payload verification
+        if: ${{ env.ALIYUN_REGISTRY != '' && env.ALIYUN_REGISTRY_NAMESPACE != '' && env.ALIYUN_REGISTRY_USERNAME != '' && env.ALIYUN_REGISTRY_PASSWORD != '' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ALIYUN_REGISTRY }}
+          username: ${{ env.ALIYUN_REGISTRY_USERNAME }}
+          password: ${{ env.ALIYUN_REGISTRY_PASSWORD }}
       - uses: actions/download-artifact@v4
         with:
           name: release-changelog
@@ -2950,6 +2999,15 @@ jobs:
         run: |
           set -euo pipefail
           node agent-harness/generate-runtime-image-registry.mjs --check deploy/runtime-image-registry.json
+      - name: Verify final catalog matches native-smoke platform manifests
+        env:
+          REPOSITORY_PREFIX: ghcr.io/${{ steps.release.outputs.owner }}
+        run: |
+          set -euo pipefail
+          node agent-harness/check-runtime-catalog-platforms.mjs \
+            --catalog deploy/runtime-image-registry.json \
+            --repository-prefix "$REPOSITORY_PREFIX" \
+            --artifacts chrome-arch --artifacts clickhouse-arch
       - name: 准备 v2 Release asset
         run: |
           set -euo pipefail

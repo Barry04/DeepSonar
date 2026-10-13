@@ -974,9 +974,11 @@ const chromeReleaseBlock = releaseWorkflow.slice(
   releaseWorkflow.indexOf("  clickhouse-image-builds:"),
 );
 expect(
-  chromeReleaseBlock.includes('mapfile -t amd64_sources < <(bash agent-harness/select-runtime-platform-sources.sh "$amd64_source" "linux/amd64")') &&
-    chromeReleaseBlock.includes('mapfile -t arm64_sources < <(bash agent-harness/select-runtime-platform-sources.sh "$arm64_source" "linux/arm64")') &&
-    chromeReleaseBlock.includes('source_refs=("${amd64_sources[0]}" "${arm64_sources[0]}")') &&
+  chromeReleaseBlock.includes('selected_sources_text="$(node agent-harness/runtime-platform-manifests.mjs "${platform_args[@]}")"') &&
+    chromeReleaseBlock.includes('--source "linux/amd64=${IMAGE_NAME}@${amd64_digest}"') &&
+    chromeReleaseBlock.includes('--source "linux/arm64=${IMAGE_NAME}@${arm64_digest}"') &&
+    chromeReleaseBlock.includes('mapfile -t source_refs <<< "$selected_sources_text"') &&
+    chromeReleaseBlock.includes('[[ "$reuse_status" -eq 2 ]] || exit "$reuse_status"') &&
     chromeReleaseBlock.includes('retry_imagetools_create "${annotation_args[@]}" "${acr_tag_args[@]}" "$clean_source"') &&
     chromeReleaseBlock.includes('retry_imagetools_create "${annotation_args[@]}" "${dockerhub_tag_args[@]}" "$clean_source"') &&
     !chromeReleaseBlock.includes('retry_imagetools_create "${annotation_args[@]}" "${acr_tag_args[@]}" "${source_refs[@]}"'),
@@ -987,9 +989,11 @@ const clickhouseReleaseBlock = releaseWorkflow.slice(
   releaseWorkflow.indexOf("  kali-minimal:"),
 );
 expect(
-  clickhouseReleaseBlock.includes('mapfile -t amd64_sources < <(bash agent-harness/select-runtime-platform-sources.sh "$amd64_source" "linux/amd64")') &&
-    clickhouseReleaseBlock.includes('mapfile -t arm64_sources < <(bash agent-harness/select-runtime-platform-sources.sh "$arm64_source" "linux/arm64")') &&
-    clickhouseReleaseBlock.includes('source_refs=("${amd64_sources[0]}" "${arm64_sources[0]}")') &&
+  clickhouseReleaseBlock.includes('selected_sources_text="$(node agent-harness/runtime-platform-manifests.mjs "${platform_args[@]}")"') &&
+    clickhouseReleaseBlock.includes('--source "linux/amd64=${IMAGE_NAME}@${amd64_digest}"') &&
+    clickhouseReleaseBlock.includes('--source "linux/arm64=${IMAGE_NAME}@${arm64_digest}"') &&
+    clickhouseReleaseBlock.includes('mapfile -t source_refs <<< "$selected_sources_text"') &&
+    clickhouseReleaseBlock.includes('[[ "$reuse_status" -eq 2 ]] || exit "$reuse_status"') &&
     clickhouseReleaseBlock.includes('retry_imagetools_create "${annotation_args[@]}" "${acr_tag_args[@]}" "$clean_source"') &&
     clickhouseReleaseBlock.includes('retry_imagetools_create "${annotation_args[@]}" "${dockerhub_tag_args[@]}" "$clean_source"') &&
     !clickhouseReleaseBlock.includes('retry_imagetools_create "${annotation_args[@]}" "${acr_tag_args[@]}" "${source_refs[@]}"'),
@@ -1076,6 +1080,22 @@ expect(
     && reuseCatalogDescriptor.includes("CatalogReuseMiss")
     && reuseCatalogDescriptor.includes("process.exitCode = CATALOG_REUSE_MISS_EXIT"),
   "catalog reuse miss must be distinguishable from a broken catalog row",
+);
+expect(
+  !reuseCatalogDescriptor.includes("versions[0]") && reuseCatalogDescriptor.includes("samePlatformDigests(actual, expected)") &&
+    releaseWorkflow.includes("agent-harness/check-runtime-catalog-platforms.mjs") &&
+    releaseWorkflow.includes("--artifacts chrome-arch --artifacts clickhouse-arch"),
+  "catalog reuse and final release must prove equality with native-smoke platform manifests",
+);
+const finalReleaseBlock = releaseWorkflow.slice(releaseWorkflow.indexOf("\n  release:"));
+expect(
+  finalReleaseBlock.includes("Login GHCR for final payload verification") &&
+    finalReleaseBlock.includes("Login Docker Hub for final payload verification") &&
+    finalReleaseBlock.includes("Login Aliyun ACR for final payload verification") &&
+    finalReleaseBlock.includes("DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}") &&
+    finalReleaseBlock.indexOf("Login Aliyun ACR for final payload verification") <
+      finalReleaseBlock.indexOf("agent-harness/check-runtime-catalog-platforms.mjs"),
+  "final payload verification must authenticate configured registries in its own job",
 );
 expect(!releaseWorkflow.includes("release still republishes and inspects every configured channel"), "unchanged runtime products must not republish platform-version tags");
 expect(!releaseWorkflow.includes("Kali build unchanged; retag"), "unchanged Kali must keep its existing version instead of retagging");

@@ -1,10 +1,26 @@
 ## [Unreleased]
 
+## [0.5.4] - 2026-10-13
+
+### 发布状态
+
+- **待发布**：本节是 v0.5.4 发布准备记录，不代表 tag、GitHub Release 或镜像已发布。当前 main 已纳入 `deepsonar-reverse`，清单生成器要求全部 14 个官方产品的 descriptor，但 `release.yml` 尚无 reverse 发布 job，缺少 `reverse.json` 与双架构发布证据；发布路径补齐并通过最终 CI / 发布前门禁前不得打 tag，完整发布证据通过前不得宣称 Release 完成，也不得伪造 digest / inspect 证据或静默排除 reverse。
+
+### 修复
+
+- 修复 Chrome / ClickHouse Audit、Test、Fuzz 两个架构同时命中 source-cache 时直接复用旧 catalog 首行、导致最终发布 digest 与本轮测试 payload 不一致的问题：先将本轮 amd64 / arm64 wrapper 解析为各平台唯一可运行 manifest，再按候选 catalog 的不可变 digest 比较精确平台 → manifest digest 映射，忽略 attestation descriptor；只有 payload 完全相同才复用旧 version + canonical digest。source-cache 命中本身不是复用证明。payload 不同或 catalog 无匹配行时，使用已测试缓存子镜像重新组装 index，并重新发布、inspect 各配置通道，收集真实 registry evidence；解析或 inspect 错误仍 fail closed。其他调用方按精确 canonical digest 复用的契约保持有效。
+- 新增最终清单 payload 门禁 `check-runtime-catalog-platforms.mjs`：要求六个产品 × 两个平台的全部 12 份 native-smoke artifact，重新 inspect 生成清单中的 GHCR 与每个 available 可选通道的不可变 index，逐个平台核对实际测试子 manifest；缺件、重复、解析失败或任意通道 mismatch 均阻断 Release asset 上传与 bundled 回写。运行镜像输入与 fingerprint 不变。
+
 ### 新增
 
 - 接入 project opt-in 深度二进制解析镜像 `deepsonar-reverse`（#718 PR1）：从 `deepsonar-base` 派生，钉死 `rea-agents@6.4.0`（gitHead `a56f7bb…` + npm integrity）、Ghidra 12.1.4（checksum）与完整 JDK 21；构建期校验 Node ≥ 22.19 与 arch 匹配 native decompiler。CLI-only（无 MCP/Hopper/IDA/常驻服务），不改变全局默认，也不把 Ghidra 塞进 `deepsonar-mobile`。同步 runtime manifest、离线手册、fingerprint、registry（首发 `versions: []`）、Image Admission 一致性门禁、Hub 能力表、Scheduler 专项边界、受治理 CLI 能力 `binary.rea.cli` 与 Skill `deepsonar-rea-cli`（content hash）。
 - #718 PR2：amd64 实跑钉死 REA CLI + Ghidra（公开可复现 ELF/.so 样本），记录冷启动/重复查询/峰值 RSS/取消响应，并设定镜像压缩预算暂定 2800 MiB 与 Job 内存建议 ≥4 GiB（见 `agent-harness/reverse-amd64-measurements.json`）。新增 `binary.rea.cli` Evidence 归一化与行为单测（成功/非零/截断/部分 JSON/超时/取消/清理、缺失能力与未准入镜像拒绝），接入 `pnpm ci:unit:cli-capability`。同步 Skill/手册/矩阵/DESIGN/文档索引。arm64、OCI digest 实测、reverse-runtime workflow 与 Job 端到端闭环仍 follow-up；**不**默认启用任何项目镜像。
 - #718 PR3：在 `database/schema.sql` 官方目录种子中加入 `deepsonar-reverse`（official、project_opt_in、enabled；描述与 registry 一致），重建回填同步带上该行；Image Admission 一致性门禁与 `test-reverse-runtime.mjs` 校验种子。补齐受治理 Job 路径门禁（不依赖 docker）：Skill `deepsonar-rea-cli` 发现/拉取（selector + content hash，钉死 SKILL.md 字节）→ `binary.rea.cli` 仅在 `deepsonar-reverse` 准入冻结 → Evidence 归一化 → `emit_fact` 提案（新增 `buildReaCliFactProposal`，claim/evidence 一律 `unknown`、不带 `verification`）→ Verify 独立（REA 观察 Fact 不是结构化验证 Fact，也不是 runtime proof）。项目侧覆盖全局作用域 `RUNTIME_IMAGE_PROJECT_SCOPE_REQUIRED`、项目作用域默认可用与显式排除 `RUNTIME_IMAGE_PROJECT_NOT_ENABLED`、启动 warmup 跳过与 Hub 目录投影；全局默认镜像（base/audit/kali-minimal）不变。arm64 实测、reverse workflow/release job 与首个 OCI digest 仍 follow-up。
+
+### 部署 / 升级说明
+
+- 仅本次 catalog 正确性修正不改变运行镜像输入或 fingerprint；本版同时包含的 #718 已改动共享运行时手册输入，不能据此承诺 v0.5.4 全部命中缓存。以实际 fingerprint / 不可变缓存解析及原生冒烟结果为准。
+- 本次缓存复用修正不改变数据库 schema，主线保持 v56；历史 Job 的冻结 digest / 快照不改写。准备期间不手写现有 bundled 清单中的运行镜像 digest；v0.5.3 的这六个产品选择已知陈旧，只能在新 Release 的真实发布证据通过后由 workflow 回写纠正。
 
 ## [0.5.3] - 2026-10-12
 
@@ -1098,6 +1114,7 @@
 
 - The bundled runtime registry was synchronized for the `v0.1.18` release.
 
+[0.5.4]: https://github.com/SummerSec/DeepSonar/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/SummerSec/DeepSonar/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/SummerSec/DeepSonar/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/SummerSec/DeepSonar/compare/v0.4.11...v0.5.1
