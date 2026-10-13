@@ -61,8 +61,10 @@ test("busy errors are treated as queue progress, not a hard wait", () => {
     finished_at: null,
     total: 2,
     completed: 1,
+    succeeded: 1,
+    failed: 0,
     items: [],
-  }), "拉取进度 1/2");
+  }), "拉取进度 1/2（成功 1 · 失败 0）");
   assert.equal(formatPullElapsed("2026-08-18T16:00:00.000Z", "2026-08-18T16:01:05.000Z"), "1m 5s");
   assert.equal(pullHeadline({
     task_id: "task",
@@ -119,4 +121,18 @@ test("channel switch busy is progress, not a hard failure", () => {
   assert.match(page, /persistRegistryChannel\(channel\)/);
   assert.match(page, /isRuntimeImagePullBusyError\(message\)/);
   assert.match(page, /rememberInFlightChannel/);
+});
+
+test("failed pull headline exposes succeeded/failed/total counts", () => {
+  assert.equal(pullHeadline({
+    task_id: "task",
+    status: "failed",
+    started_at: null,
+    finished_at: "2026-10-13T00:00:00.000Z",
+    total: 13,
+    completed: 13,
+    succeeded: 12,
+    failed: 1,
+    items: [],
+  }), "拉取完成：成功 12 / 失败 1 / 共 13");
 });

@@ -5,6 +5,7 @@ export function pullPurposeLabel(purpose?: string): string {
   if (purpose.startsWith("project_binding:")) return "项目启用";
   if (purpose.startsWith("registry_channel:")) return "仓库通道切换";
   if (purpose === "admin_bulk") return "注册表预热";
+  if (purpose === "admin_targeted") return "定向恢复";
   return purpose;
 }
 
@@ -17,12 +18,31 @@ export function pullItemStatusLabel(status: RuntimeImagePullItem["status"] | Run
   return "空闲";
 }
 
+export function pullCounts(task: Pick<RuntimeImagePullTask, "total" | "completed" | "succeeded" | "failed" | "items">): {
+  total: number;
+  completed: number;
+  succeeded: number;
+  failed: number;
+} {
+  const succeeded = task.succeeded ?? task.items.filter((item) => item.status === "succeeded").length;
+  const failed = task.failed ?? task.items.filter((item) => item.status === "failed").length;
+  return {
+    total: task.total,
+    completed: task.completed,
+    succeeded,
+    failed,
+  };
+}
+
 export function pullHeadline(task: RuntimeImagePullTask): string {
-  if (task.status === "succeeded") return "拉取完成，可再次启用";
-  if (task.status === "failed") return "拉取完成，但有失败项";
+  const counts = pullCounts(task);
+  if (task.status === "succeeded") return `拉取完成（${counts.succeeded}/${counts.total} 成功），可再次启用`;
+  if (task.status === "failed") {
+    return `拉取完成：成功 ${counts.succeeded} / 失败 ${counts.failed} / 共 ${counts.total}`;
+  }
   if (task.status === "interrupted") return "拉取被 Scheduler 重启中断，可重新拉取";
   if (task.status === "queued" || task.status === "running") {
-    return `拉取进度 ${task.completed}/${task.total}`;
+    return `拉取进度 ${counts.completed}/${counts.total}（成功 ${counts.succeeded} · 失败 ${counts.failed}）`;
   }
   return "暂无拉取任务";
 }

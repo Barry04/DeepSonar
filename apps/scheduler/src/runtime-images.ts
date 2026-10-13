@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { agentCliIdsCompatibleWithImage } from "@deepsonar/runtime-sandbox";
@@ -15,10 +14,60 @@ import {
   interruptInFlightRuntimeImagePullTasks,
   loadLatestRuntimeImagePullTask,
   persistRuntimeImagePullTask,
+  recountRuntimeImagePullTaskCounts,
   resetRuntimeImagePullTaskStore,
   type RuntimeImagePullItem,
   type RuntimeImagePullTask,
 } from "./runtime-image-pull-status.js";
+import {
+  RUNTIME_IMAGE_PULL_MAX_ATTEMPTS,
+  classifyRuntimeImagePullFailure,
+  isRetryableRuntimeImagePullFailure,
+  logRuntimeImagePullAttempt,
+  recordRuntimeImagePullSpeed,
+  resolveRuntimeImagePullTimeoutSec,
+  type RuntimeImagePullFailureClass,
+} from "./runtime-image-pull-timeout.js";
+
+import {
+  RUNTIME_IMAGE_CHANNEL_TIMEOUT_FALLBACK_ERROR,
+  RUNTIME_IMAGE_DIGEST_NOT_FOUND_ERROR,
+  RUNTIME_IMAGE_PULL_MAX_ERROR_BYTES,
+  immutableDigest,
+  localImageDigest,
+  sanitizeRuntimeImageError,
+} from "./runtime-image-oci.js";
+export {
+  RUNTIME_IMAGE_CHANNEL_TIMEOUT_FALLBACK_ERROR,
+  RUNTIME_IMAGE_DIGEST_NOT_FOUND_ERROR,
+  immutableDigest,
+  localImageDigest,
+  sanitizeRuntimeImageError,
+} from "./runtime-image-oci.js";
+import {
+  assertRuntimeImageAvailable,
+  configureRuntimeImageEnsureCatalogLoader,
+  ensureRuntimeImageAvailable,
+  isDigestNotFoundError,
+  isTransientRegistryTransportError,
+  localRuntimeImageMatchesRef,
+  prepareRuntimeImage,
+  verifiedSameDigestChannelRefs,
+} from "./runtime-image-ensure.js";
+export {
+  assertRuntimeImageAvailable,
+  ensureRuntimeImageAvailable,
+  isDigestNotFoundError,
+  isTransientRegistryTransportError,
+  localRuntimeImageMatchesRef,
+  prepareRuntimeImage,
+  verifiedSameDigestChannelRefs,
+} from "./runtime-image-ensure.js";
+export type {
+  RuntimeImageEnsureDependencies,
+  RuntimeImageEnsureInspection,
+  RuntimeImagePullOptions,
+} from "./runtime-image-ensure.js";
 import {
   classifyRuntimeImageReadinessFromState,
   hostManagesRuntimeImageLayers,
@@ -82,11 +131,6 @@ const OFFICIAL_RUNTIME_IMAGE_REGISTRY_AUTH_HOSTS = new Set(["github.com", "api.g
 const RUNTIME_IMAGE_REGISTRY_MAX_BYTES = 1024 * 1024;
 const RUNTIME_IMAGE_REGISTRY_CACHE_MS = 5 * 60_000;
 const RUNTIME_IMAGE_REGISTRY_RETRY_MS = 60_000;
-const RUNTIME_IMAGE_PULL_MAX_ERROR_BYTES = 8 * 1024;
-const SAME_DIGEST_REF_CACHE_MS = 60_000;
-const SAME_DIGEST_FALLBACK_CHANNELS = ["dockerhub", "github", "aliyun-acr"] as const;
-export const RUNTIME_IMAGE_CHANNEL_TIMEOUT_FALLBACK_ERROR = "channel timed out, same-digest fallback attempted";
-export const RUNTIME_IMAGE_DIGEST_NOT_FOUND_ERROR = "digest not found";
 
 export type RuntimeImageRegistryVersion = RuntimeImageRegistryVersionContract;
 export type RuntimeImageRegistry = RuntimeImageRegistryContract;
@@ -130,8 +174,20 @@ export type {
 } from "./runtime-image-pull-status.js";
 export {
   idleRuntimeImagePullStatus,
+  recountRuntimeImagePullTaskCounts,
   toRuntimeImagePullStatusView,
 } from "./runtime-image-pull-status.js";
+export {
+  RUNTIME_IMAGE_PULL_MAX_ATTEMPTS,
+  RUNTIME_IMAGE_PULL_TIMEOUT_AUTO_MAX_SEC,
+  RUNTIME_IMAGE_PULL_TIMEOUT_AUTO_MIN_SEC,
+  RUNTIME_IMAGE_PULL_TIMEOUT_ENV,
+  RUNTIME_IMAGE_PULL_TIMEOUT_ENV_MAX_SEC,
+  RUNTIME_IMAGE_PULL_TIMEOUT_ENV_MIN_SEC,
+  classifyRuntimeImagePullFailure,
+  isRetryableRuntimeImagePullFailure,
+  resolveRuntimeImagePullTimeoutSec,
+} from "./runtime-image-pull-timeout.js";
 export type {
   RuntimeImageReadiness,
   RuntimeImageReadinessView,
@@ -486,31 +542,8 @@ export function runtimeImageHttpError(error: unknown): { statusCode: number; bod
   return null;
 }
 
-export class RuntimeImageNotReadyError extends Error {
-  readonly code = "runtime_image_not_ready" as const;
-  readonly imageKey: string | null;
-  readonly readiness: RuntimeImageReadiness;
-  readonly preparing: boolean;
-  readonly taskId: string | null;
-  readonly checkedAt: string;
-
-  constructor(readonly imageRef: string, extras?: {
-    imageKey?: string | null;
-    readiness?: RuntimeImageReadiness;
-    preparing?: boolean;
-    taskId?: string | null;
-    checkedAt?: string;
-    message?: string;
-  }) {
-    super(extras?.message ?? `runtime_image_not_ready: runtime image is not prepared locally: ${imageRef}`);
-    this.name = "RuntimeImageNotReadyError";
-    this.imageKey = extras?.imageKey ?? null;
-    this.readiness = extras?.readiness ?? "unavailable";
-    this.preparing = extras?.preparing ?? false;
-    this.taskId = extras?.taskId ?? null;
-    this.checkedAt = extras?.checkedAt ?? new Date().toISOString();
-  }
-}
+import { RuntimeImageNotReadyError } from "./runtime-image-errors.js";
+export { RuntimeImageNotReadyError } from "./runtime-image-errors.js";
 
 /** Retained for route fallbacks. Project enablement and admin pull now enqueue instead of throwing. */
 export class RuntimeImagePreparationBusyError extends Error {
@@ -604,10 +637,6 @@ export function runtimeImageVersionPin(versionId: string | null | undefined): st
   return versionId ?? null;
 }
 
-export function immutableDigest(imageRef: string): string | null {
-  const match = imageRef.trim().match(/@(sha256:[0-9a-f]{64})$/);
-  return match?.[1] ?? null;
-}
 
 /** Return the digest visible to the legacy GitHub-backed runtime consumer. */
 export function legacyProjectedRegistryDigest(version: RuntimeImageRegistryVersion): string | null {
@@ -742,31 +771,6 @@ export function selectRuntimeImageRef(
   return matches[0]!;
 }
 
-export function localImageDigest(imageRef: string): string | null {
-  const trimmed = imageRef.trim();
-  const withPrefix = trimmed.match(/^sha256:[0-9a-f]{64}$/);
-  if (withPrefix) return withPrefix[0];
-  // podman `docker image inspect --format {{.Id}}` 常返回无 sha256: 前缀的 64 hex
-  const bare = trimmed.match(/^[0-9a-f]{64}$/);
-  return bare ? `sha256:${bare[0]}` : null;
-}
-
-/**
- * Docker/registry errors are operator diagnostics, not an opportunity to echo
- * credentials or unbounded command output back through the API.
- */
-export function sanitizeRuntimeImageError(value: unknown, maxBytes = RUNTIME_IMAGE_PULL_MAX_ERROR_BYTES): string {
-  let text = value instanceof Error ? value.message : String(value ?? "");
-  text = text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
-  text = text.replace(/([a-z][a-z0-9+.-]*:\/\/)([^\s/@:]+)(?::[^\s/@]*)?@/gi, "$1<redacted>@");
-  text = text.replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer <redacted>");
-  text = text.replace(/\b(authorization|password|passwd|token|secret|credential)\s*[:=]\s*[^\s,;]+/gi, "$1=<redacted>");
-  const bytes = Buffer.byteLength(text, "utf8");
-  if (bytes <= maxBytes) return text;
-  let end = Math.max(0, Math.floor(maxBytes * 0.9));
-  while (end > 0 && Buffer.byteLength(text.slice(0, end), "utf8") > maxBytes - 16) end -= 1;
-  return `${text.slice(0, end)} …[truncated]`;
-}
 
 export { inspectLocalRuntimeImage };
 export {
@@ -1600,15 +1604,40 @@ export async function runRuntimeImagePreparationTask(
       item.started_at = new Date().toISOString();
       await persistRuntimeImagePullTask(task);
       try {
+        item.target_digest = item.target_digest ?? immutableDigest(item.image_ref);
         await prepare(item.image_ref);
         item.status = "succeeded";
+        item.failure_class = null;
+        item.error = null;
+        item.error_code = null;
+        item.attempts = item.attempts ?? 1;
+        item.retry_count = item.retry_count ?? 0;
       } catch (error) {
         item.status = "failed";
         item.error = sanitizeRuntimeImageError(error) || "runtime image preparation failed";
-        item.error_code = "pull_failed";
+        const meta = error as { failure_class?: string; attempts?: number; retry_count?: number; timeout_budget_sec?: number };
+        item.failure_class = typeof meta.failure_class === "string"
+          ? meta.failure_class
+          : classifyRuntimeImagePullFailure(error);
+        item.error_code = item.failure_class === "digest_missing"
+          ? "digest_missing"
+          : item.failure_class === "auth"
+            ? "auth_failed"
+            : item.failure_class === "disk_full"
+              ? "disk_full"
+              : item.failure_class === "timeout"
+                ? "pull_timeout"
+                : "pull_failed";
+        if (typeof meta.attempts === "number") item.attempts = meta.attempts;
+        if (typeof meta.retry_count === "number") item.retry_count = meta.retry_count;
+        if (typeof meta.timeout_budget_sec === "number") item.timeout_budget_sec = meta.timeout_budget_sec;
       }
       item.finished_at = new Date().toISOString();
-      task.completed += 1;
+      try {
+        recountRuntimeImagePullTaskCounts(task);
+      } catch {
+        // Keep pull progress durable even if item enumeration is unhealthy.
+      }
       await persistRuntimeImagePullTask(task);
     }
   } catch (error) {
@@ -1627,6 +1656,11 @@ export async function runRuntimeImagePreparationTask(
     if (task.status === "queued" || task.status === "running") {
       task.status = "failed";
       task.finished_at = new Date().toISOString();
+    }
+    try {
+      recountRuntimeImagePullTaskCounts(task);
+    } catch {
+      // Item bookkeeping may be intentionally broken in tests / crash paths.
     }
     await persistRuntimeImagePullTask(task);
   }
@@ -1656,13 +1690,19 @@ export function enqueueRuntimeImagePreparation(
     task.items.push({
       image_key: item.image_key,
       image_ref: item.image_ref,
+      target_digest: immutableDigest(item.image_ref),
       status: "queued",
       error: null,
+      failure_class: null,
+      attempts: 0,
+      retry_count: 0,
+      timeout_budget_sec: null,
       started_at: null,
       finished_at: null,
     });
   }
   task.total = task.items.length;
+  recountRuntimeImagePullTaskCounts(task);
   void persistRuntimeImagePullTask(task);
   return task;
 }
@@ -1680,15 +1720,21 @@ function startRuntimeImagePreparationTask(
   const items: RuntimeImagePullItem[] = uniqueRefs.map((item) => ({
     image_key: item.image_key,
     image_ref: item.image_ref,
+    target_digest: immutableDigest(item.image_ref),
     status: "queued" as const,
     error: null,
+    failure_class: null,
+    attempts: 0,
+    retry_count: 0,
+    timeout_budget_sec: null,
     started_at: null,
     finished_at: null,
   }));
   const task: RuntimeImagePullTask = {
     task_id: createHash("sha256").update(`${Date.now()}:${Math.random()}`).digest("hex").slice(0, 24),
     purpose,
-    status: "queued", started_at: null, finished_at: null, total: items.length, completed: 0, items,
+    status: "queued", started_at: null, finished_at: null,
+    total: items.length, completed: 0, succeeded: 0, failed: 0, items,
   };
   runtimeImagePullTask = task;
   void persistRuntimeImagePullTask(task);
@@ -1717,277 +1763,34 @@ export async function requestRuntimeImagePreparation(
   return { ready: false, task: startRuntimeImagePreparationTask(missing, purpose, dependencies.prepare) };
 }
 
-function pullRuntimeImage(imageRef: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn("docker", ["pull", imageRef], { shell: false, stdio: ["ignore", "ignore", "pipe"], windowsHide: true });
-    let stderr = "";
-    const capture = (chunk: Buffer | string) => {
-      if (Buffer.byteLength(stderr, "utf8") >= RUNTIME_IMAGE_PULL_MAX_ERROR_BYTES) return;
-      stderr += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : chunk;
-      if (Buffer.byteLength(stderr, "utf8") > RUNTIME_IMAGE_PULL_MAX_ERROR_BYTES) {
-        while (Buffer.byteLength(stderr, "utf8") > RUNTIME_IMAGE_PULL_MAX_ERROR_BYTES) stderr = stderr.slice(0, -1);
-      }
-    };
-    child.stderr?.on("data", capture);
-    let settled = false;
-    const finish = (error?: Error) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      if (error) reject(error);
-      else resolve();
-    };
-    const timer = setTimeout(() => {
-      child.kill("SIGTERM");
-      finish(new Error("docker pull 超时"));
-    }, 300_000);
-    child.once("error", (error) => finish(error));
-    child.once("close", (code) => {
-      if (code === 0) finish();
-      else {
-        const detail = sanitizeRuntimeImageError(stderr);
-        finish(new Error(`docker pull exit code ${code ?? "unknown"}${detail ? `: ${detail}` : ""}`));
-      }
-    });
-  });
-}
-
-export interface RuntimeImageEnsureInspection {
-  exists: boolean;
-  image_id?: string | null;
-  repo_digests?: readonly string[];
-  immutable_ref?: string | null;
-  error?: string | null;
-}
-
-export interface RuntimeImageEnsureDependencies {
-  inspect: (imageRef: string) => Promise<RuntimeImageEnsureInspection>;
-  pull: (imageRef: string) => Promise<void>;
-  /** Verified same-digest refs from catalog evidence; never used to rewrite the selected channel. */
-  sameDigestRefs?: (digest: string, selectedRef: string) => Promise<readonly string[]> | readonly string[];
-}
-
-const runtimeImageEnsureInFlight = new Map<string, Promise<void>>();
-let sameDigestCatalogCache: { at: number; images: RuntimeImageRegistry["images"] } | null = null;
-
-function defaultRuntimeImageEnsureDependencies(): RuntimeImageEnsureDependencies {
-  return {
-    inspect: async (imageRef) => inspectLocalRuntimeImage(imageRef, "", [imageRef]),
-    pull: pullRuntimeImage,
-    sameDigestRefs: defaultVerifiedSameDigestRefs,
-  };
-}
-
-function uniqueImageRefs(refs: readonly string[]): string[] {
-  const seen = new Set<string>();
-  const unique: string[] = [];
-  for (const ref of refs) {
-    const normalized = ref.trim();
-    if (!normalized || seen.has(normalized)) continue;
-    seen.add(normalized);
-    unique.push(normalized);
-  }
-  return unique;
-}
-
-function inspectionDigest(value: string | null | undefined): string | null {
-  if (!value) return null;
-  return immutableDigest(value) ?? localImageDigest(value);
-}
-
-/** Local readiness is digest/Id based. RepoDigests need not name the selected channel repository. */
-export function localRuntimeImageMatchesRef(
-  inspection: RuntimeImageEnsureInspection,
-  imageRef: string,
-  expectedDigest: string,
-): boolean {
-  if (!inspection.exists) return false;
-  if (inspection.image_id && localImageDigest(inspection.image_id) === expectedDigest) return true;
-  if (inspectionDigest(inspection.immutable_ref) === expectedDigest) return true;
-  if (inspection.immutable_ref === imageRef) return true;
-  return (inspection.repo_digests ?? []).some((ref) => ref === imageRef || inspectionDigest(ref) === expectedDigest);
-}
-
-export function isDigestNotFoundError(error: unknown): boolean {
-  const text = typeof error === "string" ? error : sanitizeRuntimeImageError(error);
-  return /digest not found|manifest unknown|not found|no such image|unknown blob|repository does not exist/i.test(text);
-}
-
-export function isTransientRegistryTransportError(error: unknown): boolean {
-  const text = sanitizeRuntimeImageError(error);
-  if (!text || isDigestNotFoundError(text)) return false;
-  return /timeout|timed out|deadline exceeded|\beof\b|unexpected eof|httpReadSeeker|aliregistry\.oss|connection reset|i\/o timeout/i.test(text);
-}
-
-/** Other catalog channels that already inspected the same canonical digest. Selected ref is excluded. */
-export function verifiedSameDigestChannelRefs(
-  images: readonly RuntimeImageRegistry["images"][number][],
-  digest: string,
-  selectedRef: string,
-): string[] {
-  const selected = selectedRef.trim();
-  const found: string[] = [];
-  const seen = new Set<string>(selected ? [selected] : []);
-  for (const channel of SAME_DIGEST_FALLBACK_CHANNELS) {
-    for (const image of images) {
-      for (const version of image.versions) {
-        const versionDigest = version.digest ?? immutableDigest(version.image_ref ?? "") ?? "";
-        if (versionDigest !== digest) continue;
-        const evidence = version.registry_evidence?.[channel];
-        if (!evidence || evidence.available !== true) continue;
-        if (evidence.inspect_digest && evidence.inspect_digest !== digest) continue;
-        const ref = evidence.ref ?? version.registry_refs?.[channel];
-        if (!ref || seen.has(ref) || immutableDigest(ref) !== digest) continue;
-        seen.add(ref);
-        found.push(ref);
-      }
+export async function startRuntimeImagePull(input: StartRuntimeImagePullInput = {}): Promise<RuntimeImagePullTask> {
+  if (input.items && input.items.length > 0) {
+    const exact: Array<{ image_key: string; image_ref: string }> = [];
+    for (const item of input.items) {
+      const imageKey = item.image_key.trim();
+      const imageRef = item.image_ref.trim();
+      if (!imageKey || !imageRef) throw new Error("定向拉取 items 需要非空的 image_key 与 image_ref");
+      if (!immutableDigest(imageRef)) throw new Error(`定向拉取必须使用不可变 digest 引用：${imageKey}`);
+      exact.push({ image_key: imageKey, image_ref: imageRef });
     }
-  }
-  return found;
-}
-
-async function defaultVerifiedSameDigestRefs(digest: string, selectedRef: string): Promise<string[]> {
-  try {
-    const now = Date.now();
-    if (!sameDigestCatalogCache || now - sameDigestCatalogCache.at > SAME_DIGEST_REF_CACHE_MS) {
-      const registry = await runtimeImageRegistryWithOverrides();
-      sameDigestCatalogCache = { at: now, images: registry.images };
-    }
-    return verifiedSameDigestChannelRefs(sameDigestCatalogCache.images, digest, selectedRef);
-  } catch {
-    return [];
-  }
-}
-
-async function resolveSameDigestRefs(
-  digest: string,
-  selectedRef: string,
-  dependencies: Pick<RuntimeImageEnsureDependencies, "sameDigestRefs">,
-): Promise<string[]> {
-  if (!dependencies.sameDigestRefs) return [];
-  return [...await Promise.resolve(dependencies.sameDigestRefs(digest, selectedRef))]
-    .map((ref) => ref.trim())
-    .filter((ref) => ref && ref !== selectedRef && immutableDigest(ref) === digest);
-}
-
-async function inspectFrozenDigest(
-  selectedRef: string,
-  expectedDigest: string,
-  dependencies: Pick<RuntimeImageEnsureDependencies, "inspect" | "sameDigestRefs">,
-): Promise<RuntimeImageEnsureInspection> {
-  const extra = await resolveSameDigestRefs(expectedDigest, selectedRef, dependencies);
-  const candidates = uniqueImageRefs([selectedRef, expectedDigest, ...extra]);
-  let last: RuntimeImageEnsureInspection = { exists: false };
-  for (const candidate of candidates) {
-    try {
-      last = await dependencies.inspect(candidate);
-    } catch (error) {
-      last = { exists: false, error: sanitizeRuntimeImageError(error) };
-    }
-    if (localRuntimeImageMatchesRef(last, selectedRef, expectedDigest)) return last;
-  }
-  return last;
-}
-
-function pullFailureMessage(expectedDigest: string, error: unknown, fallbackAttempted: boolean): string {
-  const detail = sanitizeRuntimeImageError(error) || "docker pull 失败，请检查 Docker、网络和 registry 凭据";
-  if (fallbackAttempted || isTransientRegistryTransportError(error)) {
-    return `冻结 runtime image 拉取失败（${expectedDigest}）：${RUNTIME_IMAGE_CHANNEL_TIMEOUT_FALLBACK_ERROR}: ${detail}`;
-  }
-  if (isDigestNotFoundError(error)) {
-    return `冻结 runtime image 拉取失败（${expectedDigest}）：${RUNTIME_IMAGE_DIGEST_NOT_FOUND_ERROR}: ${detail}`;
-  }
-  return `冻结 runtime image 拉取失败（${expectedDigest}）：${detail}`;
-}
-
-async function ensureRuntimeImageAvailableOnce(
-  imageRef: string,
-  expectedDigest: string,
-  dependencies: RuntimeImageEnsureDependencies,
-): Promise<void> {
-  let inspection = await inspectFrozenDigest(imageRef, expectedDigest, dependencies);
-  if (localRuntimeImageMatchesRef(inspection, imageRef, expectedDigest)) return;
-
-  const fallbacks = await resolveSameDigestRefs(expectedDigest, imageRef, dependencies);
-  try {
-    await dependencies.pull(imageRef);
-  } catch (error) {
-    if (!isTransientRegistryTransportError(error)) {
-      throw new Error(pullFailureMessage(expectedDigest, error, false));
-    }
-    let fallbackError: unknown = error;
-    let pulledFallback = false;
-    for (const fallback of fallbacks) {
-      try {
-        console.warn(`[runtime-images] selected channel pull timed out; retrying same-digest fallback ${fallback}`);
-        await dependencies.pull(fallback);
-        pulledFallback = true;
-        fallbackError = null;
-        break;
-      } catch (next) {
-        fallbackError = next;
-      }
-    }
-    if (!pulledFallback) {
-      throw new Error(pullFailureMessage(expectedDigest, fallbackError ?? error, true));
-    }
+    return startRuntimeImagePreparationTask(exact, "admin_targeted");
   }
 
-  inspection = await inspectFrozenDigest(imageRef, expectedDigest, dependencies);
-  if (!localRuntimeImageMatchesRef(inspection, imageRef, expectedDigest)) {
-    const detail = sanitizeRuntimeImageError(inspection.error) || "本地镜像未包含请求的不可变 digest";
-    throw new Error(`冻结 runtime image 不可用（${expectedDigest}）：${RUNTIME_IMAGE_DIGEST_NOT_FOUND_ERROR}: ${detail}`);
-  }
-}
-
-/** Pull and verify the exact immutable snapshot image before it can be selected for work. */
-export async function prepareRuntimeImage(
-  imageRef: string,
-  dependencies: RuntimeImageEnsureDependencies = defaultRuntimeImageEnsureDependencies(),
-): Promise<void> {
-  const normalizedRef = imageRef.trim();
-  const expectedDigest = immutableDigest(normalizedRef);
-  if (!expectedDigest) throw new Error("冻结 runtime image 必须使用不可变 digest 引用");
-
-  const existing = runtimeImageEnsureInFlight.get(normalizedRef);
-  if (existing) return existing;
-  const operation = ensureRuntimeImageAvailableOnce(normalizedRef, expectedDigest, dependencies);
-  runtimeImageEnsureInFlight.set(normalizedRef, operation);
-  try {
-    await operation;
-  } finally {
-    if (runtimeImageEnsureInFlight.get(normalizedRef) === operation) runtimeImageEnsureInFlight.delete(normalizedRef);
-  }
-}
-
-/** Compatibility name for explicit admin preparation callers. */
-export const ensureRuntimeImageAvailable = prepareRuntimeImage;
-
-/** Dispatcher admission is inspect-only: it never turns Job execution into an implicit pull. */
-export async function assertRuntimeImageAvailable(
-  imageRef: string,
-  inspect?: RuntimeImageEnsureDependencies["inspect"],
-  extras: Pick<RuntimeImageEnsureDependencies, "sameDigestRefs"> = {},
-): Promise<void> {
-  const normalizedRef = imageRef.trim();
-  const expectedDigest = immutableDigest(normalizedRef);
-  if (!expectedDigest) throw new Error("runtime image snapshot must use an immutable digest reference");
-  const defaults = defaultRuntimeImageEnsureDependencies();
-  const inspection = await inspectFrozenDigest(normalizedRef, expectedDigest, {
-    inspect: inspect ?? defaults.inspect,
-    sameDigestRefs: extras.sameDigestRefs ?? (inspect ? undefined : defaults.sameDigestRefs),
-  });
-  if (!localRuntimeImageMatchesRef(inspection, normalizedRef, expectedDigest)) {
-    throw new RuntimeImageNotReadyError(normalizedRef);
-  }
-}
-
-export async function startRuntimeImagePull(): Promise<RuntimeImagePullTask> {
   const registry = await runtimeImageRegistryWithOverrides();
   const channel = await readRuntimeRegistryChannel(sql);
   // Default pull is latest-only per product on the selected channel. Older
   // trusted digests remain resolvable for pins / frozen Job snapshots.
-  const latest = selectLatestRuntimeImagePullItems(registry.images, channel);
+  let latest = selectLatestRuntimeImagePullItems(registry.images, channel);
+  if (input.image_keys && input.image_keys.length > 0) {
+    const wanted = new Set(input.image_keys.map((key) => key.trim()).filter(Boolean));
+    if (wanted.size === 0) throw new Error("image_keys 不能为空");
+    latest = latest.filter((item) => wanted.has(item.image_key));
+    const missing = [...wanted].filter((key) => !latest.some((item) => item.image_key === key));
+    if (missing.length > 0) {
+      throw new Error(`所选 image_keys 在当前通道无可用最新版本：${missing.join(", ")}`);
+    }
+    return startRuntimeImagePreparationTask(latest, "admin_targeted");
+  }
   if (latest.length === 0) throw new RuntimeImageChannelUnavailableError(channel);
   return startRuntimeImagePreparationTask(latest, "admin_bulk");
 }
@@ -2509,3 +2312,5 @@ export async function resolveRuntimeImageForProjectBinding(
 ): Promise<RuntimeImageSnapshot> {
   return selectRuntimeImageSnapshot(db, imageId, selectedVersionId, await readRuntimeRegistryChannel(db, "share"));
 }
+
+configureRuntimeImageEnsureCatalogLoader(() => runtimeImageRegistryWithOverrides());

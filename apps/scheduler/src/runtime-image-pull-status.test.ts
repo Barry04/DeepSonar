@@ -73,3 +73,45 @@ test("pull-status view exposes phase, error_code and does not synthesize idle ov
   assert.equal(idle.task_id, null);
   assert.equal(idle.phase, "idle");
 });
+
+test("pull-status view exposes succeeded/failed counts for partial batch failures", () => {
+  const task: RuntimeImagePullTask = {
+    task_id: "abc123abc123abc123abc123",
+    purpose: "admin_bulk",
+    status: "failed",
+    started_at: "2026-10-13T00:00:00.000Z",
+    finished_at: "2026-10-13T00:10:00.000Z",
+    total: 13,
+    completed: 13,
+    succeeded: 12,
+    failed: 1,
+    items: [
+      {
+        image_key: "deepsonar-base",
+        image_ref: "ghcr.io/example/base@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        target_digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        status: "failed",
+        error: "docker pull 超时",
+        failure_class: "timeout",
+        attempts: 2,
+        retry_count: 1,
+        timeout_budget_sec: 300,
+      },
+      ...Array.from({ length: 12 }, (_, i) => ({
+        image_key: `img-${i}`,
+        image_ref: `ghcr.io/example/img-${i}@sha256:${"b".repeat(64)}`,
+        target_digest: `sha256:${"b".repeat(64)}`,
+        status: "succeeded" as const,
+        error: null,
+      })),
+    ],
+  };
+  const view = toRuntimeImagePullStatusView(task, "2026-10-13T00:10:00.000Z");
+  assert.equal(view.total, 13);
+  assert.equal(view.succeeded, 12);
+  assert.equal(view.failed, 1);
+  assert.equal(view.items[0]?.target_digest?.startsWith("sha256:"), true);
+  assert.equal(view.items[0]?.failure_class, "timeout");
+  assert.equal(idleRuntimeImagePullStatus().succeeded, 0);
+  assert.equal(idleRuntimeImagePullStatus().failed, 0);
+});

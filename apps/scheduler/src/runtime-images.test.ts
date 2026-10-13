@@ -39,6 +39,9 @@ import {
   withSharedAssetsHelperRef,
   RUNTIME_IMAGE_CHANNEL_TIMEOUT_FALLBACK_ERROR,
   RUNTIME_IMAGE_DIGEST_NOT_FOUND_ERROR,
+  classifyRuntimeImagePullFailure,
+  RUNTIME_IMAGE_PULL_MAX_ATTEMPTS,
+  toRuntimeImagePullStatusView,
   OFFICIAL_RUNTIME_IMAGE_KEYS,
   isOfficialRuntimeImageKey,
   type RuntimeImageRegistry,
@@ -1316,4 +1319,90 @@ test("bundled/sync COALESCE 在 EXCLUDED 为 null 时保留已有 tools_manifest
   assert.equal(coalesceToolsManifestSha256("", existing), existing);
   const next = "b".repeat(64);
   assert.equal(coalesceToolsManifestSha256(next, existing), next);
+});
+
+
+test("auth failure is non-retryable and does not consume same-digest fallback", async () => {
+  const acrRef = `${BUILTIN_ACR_HOST}/summersec/deepsonar-base@${DIGEST}`;
+  const dockerhubRef = `docker.io/sumsec/deepsonar@${DIGEST}`;
+  const pulled: string[] = [];
+  await assert.rejects(
+    ensureRuntimeImageAvailable(acrRef, {
+      inspect: async () => ({ exists: false }),
+      pull: async (ref) => {
+        pulled.push(ref);
+        throw new Error("unauthorized: authentication required");
+      },
+      sameDigestRefs: () => [dockerhubRef],
+    }),
+    /authentication required|unauthorized/i,
+  );
+  assert.deepEqual(pulled, [acrRef]);
+});
+
+test("disk full is non-retryable", async () => {
+  const imageRef = `ghcr.io/example/base@${DIGEST}`;
+  await assert.rejects(
+    ensureRuntimeImageAvailable(imageRef, {
+      inspect: async () => ({ exists: false }),
+      pull: async () => { throw new Error("no space left on device"); },
+    }),
+    /no space left/i,
+  );
+});
+
+test("unified retry budget retries selected once when no same-digest fallback", async () => {
+  const imageRef = `ghcr.io/example/base@${DIGEST}`;
+  const pulled: string[] = [];
+  const present = new Set<string>();
+  await ensureRuntimeImageAvailable(imageRef, {
+    inspect: async (ref) => {
+      if (present.has(imageRef) && (ref === imageRef || ref === DIGEST)) {
+        return { exists: true, repo_digests: [imageRef] };
+      }
+      return { exists: false };
+    },
+    pull: async (ref) => {
+      pulled.push(ref);
+      if (pulled.length === 1) throw new Error("docker pull 超时（预算 300s）");
+      present.add(ref);
+    },
+    sameDigestRefs: () => [],
+  });
+  assert.deepEqual(pulled, [imageRef, imageRef]);
+  assert.equal(RUNTIME_IMAGE_PULL_MAX_ATTEMPTS, 2);
+});
+
+test("preparation task recounts succeeded and failed for partial batch", async () => {
+  resetRuntimeImagePullTask();
+  const ok = `ghcr.io/example/ok@${DIGEST}`;
+  const badDigest = `sha256:${"c".repeat(64)}`;
+  const bad = `ghcr.io/example/bad@${badDigest}`;
+  const task = {
+    task_id: "task724task724task724ta",
+    purpose: "admin_bulk",
+    status: "queued" as const,
+    started_at: null,
+    finished_at: null,
+    total: 2,
+    completed: 0,
+    succeeded: 0,
+    failed: 0,
+    items: [
+      { image_key: "ok", image_ref: ok, target_digest: DIGEST, status: "queued" as const, error: null },
+      { image_key: "bad", image_ref: bad, target_digest: badDigest, status: "queued" as const, error: null },
+    ],
+  };
+  await runRuntimeImagePreparationTask(task, async (ref) => {
+    if (ref === bad) throw new Error("docker pull 超时");
+  });
+  assert.equal(task.status, "failed");
+  assert.equal(task.succeeded, 1);
+  assert.equal(task.failed, 1);
+  assert.equal(task.completed, 2);
+  const view = toRuntimeImagePullStatusView(task);
+  assert.equal(view.succeeded, 1);
+  assert.equal(view.failed, 1);
+  assert.equal(classifyRuntimeImagePullFailure("docker pull 超时"), "timeout");
+  resetRuntimeImagePullTask();
 });

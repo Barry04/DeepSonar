@@ -40,6 +40,7 @@ import {
   type RuntimeImageRegistryChannel,
 } from "../../runtime-images.js";
 import { runRuntimeImageContractSelftest } from "../../runtime-image-contract-selftest.js";
+import { reconcileRuntimeImagesOnNodes } from "../../runtime-image-reconcile.js";
 
 const RuntimeImageImportBody = z.object({
   image_key: z.string().regex(/^[a-z][a-z0-9-]{1,62}$/),
@@ -311,19 +312,45 @@ export function registerRuntimeImageRoutes(app: FastifyInstance): void {
     }
   });
 
+  const RegistryPullBody = z.object({
+    image_keys: z.array(z.string().regex(/^[a-z][a-z0-9-]{1,62}$/)).max(64).optional(),
+    items: z.array(z.object({
+      image_key: z.string().regex(/^[a-z][a-z0-9-]{1,62}$/),
+      image_ref: z.string().trim().min(3).max(500),
+    })).max(64).optional(),
+  }).strict();
+
   app.post("/runtime-images/registry/pull", async (req, reply) => {
     const denied = denyProjectScopedCatalog(req, reply);
     if (denied) return denied;
     try {
-      const task = await startRuntimeImagePull();
+      const body = req.body === undefined || req.body === null || req.body === ""
+        ? {}
+        : RegistryPullBody.parse(req.body);
+      const task = await startRuntimeImagePull({
+        image_keys: body.image_keys,
+        items: body.items,
+      });
       await audit(req, {
         action: "runtime_image.registry_pull",
         resourceType: "runtime_image_pull",
         resourceId: task.task_id,
-        after: { task_id: task.task_id, total: task.total },
+        after: {
+          task_id: task.task_id,
+          purpose: task.purpose,
+          total: task.total,
+          image_keys: body.image_keys ?? null,
+          targeted_items: body.items?.map((item) => ({
+            image_key: item.image_key,
+            digest: immutableDigest(item.image_ref),
+          })) ?? null,
+        },
       });
-      return reply.code(202).send({ task });
+      return reply.code(202).send({ task: toRuntimeImagePullStatusView(task) });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({ error: error.issues[0]?.message ?? "无效的拉取请求" });
+      }
       const message = sanitizeRuntimeImageError(error) || "启动镜像拉取失败";
       if (error instanceof RuntimeImageChannelUnavailableError) {
         return reply.code(error.statusCode).send({
@@ -331,15 +358,54 @@ export function registerRuntimeImageRoutes(app: FastifyInstance): void {
           error_code: error.code,
           channel: error.channel,
           ...(error.imageKey ? { image_key: error.imageKey } : {}),
-          task: runtimeImagePullStatus(),
+          task: toRuntimeImagePullStatusView(runtimeImagePullStatus()),
         });
       }
-      return reply.code(message.includes("已有运行中") || message.includes("没有可拉取") ? 409 : 503).send({ error: message, task: runtimeImagePullStatus() });
+      return reply.code(message.includes("已有运行中") || message.includes("没有可拉取") || message.includes("image_keys") || message.includes("定向拉取") ? 409 : 503).send({
+        error: message,
+        task: toRuntimeImagePullStatusView(runtimeImagePullStatus()),
+      });
     }
   });
 
   app.get("/runtime-images/registry/pull-status", async (_req, reply) => {
     return reply.send(toRuntimeImagePullStatusView(runtimeImagePullStatus()));
+  });
+
+  const RegistryReconcileBody = z.object({
+    repair: z.boolean().optional(),
+  }).strict();
+
+  /** Read-only by default; repair=true starts a governed targeted pull for missing digests. */
+  app.post("/runtime-images/registry/reconcile", async (req, reply) => {
+    const denied = denyProjectScopedCatalog(req, reply);
+    if (denied) return denied;
+    try {
+      const body = req.body === undefined || req.body === null || req.body === ""
+        ? {}
+        : RegistryReconcileBody.parse(req.body);
+      const result = await reconcileRuntimeImagesOnNodes({ repair: body.repair === true });
+      await audit(req, {
+        action: body.repair ? "runtime_image.registry_reconcile_repair" : "runtime_image.registry_reconcile",
+        resourceType: "runtime_image_reconcile",
+        resourceId: result.repair_task?.task_id ?? "reconcile",
+        after: {
+          need_count: result.needs.length,
+          node_count: result.nodes.length,
+          missing_local: result.nodes.find((node) => node.node_kind === "local")?.missing.length ?? 0,
+          repair: body.repair === true,
+          repair_task_id: result.repair_task?.task_id ?? null,
+        },
+      });
+      return reply.code(body.repair && result.repair_task ? 202 : 200).send(result);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({ error: error.issues[0]?.message ?? "无效的对账请求" });
+      }
+      return reply.code(503).send({
+        error: sanitizeRuntimeImageError(error) || "runtime image reconcile failed",
+      });
+    }
   });
 
   const inspectLocalRuntimeImageForProduct = async (productId: string, imageRef: string) => {

@@ -1489,10 +1489,15 @@ export interface RuntimeImageCatalogSyncResult {
 export interface RuntimeImagePullItem {
   image_key: string;
   image_ref: string;
+  target_digest?: string | null;
   status: "queued" | "running" | "succeeded" | "failed";
   phase?: string;
   error: string | null;
   error_code?: string | null;
+  failure_class?: string | null;
+  attempts?: number;
+  retry_count?: number;
+  timeout_budget_sec?: number | null;
   started_at?: string | null;
   finished_at?: string | null;
 }
@@ -1510,6 +1515,8 @@ export interface RuntimeImagePullTask {
   error?: string | null;
   total: number;
   completed: number;
+  succeeded?: number;
+  failed?: number;
   items: RuntimeImagePullItem[];
   checked_at?: string;
 }
@@ -2691,8 +2698,23 @@ export const api = {
   /** 手动上传 runtime-image-registry.json 并写入市场（schema deepsonar.registry/v1/v2） */
   applyRuntimeImagesRegistry: (registry: RuntimeImageRegistry | Record<string, unknown>) =>
     send<RuntimeImageCatalogSyncResult>("POST", "/runtime-images/registry/apply", registry),
-  pullRuntimeImagesRegistry: () => send<{ task: RuntimeImagePullTask }>("POST", "/runtime-images/registry/pull"),
+  pullRuntimeImagesRegistry: (body?: {
+    image_keys?: string[];
+    items?: Array<{ image_key: string; image_ref: string }>;
+  }) => send<{ task: RuntimeImagePullTask }>("POST", "/runtime-images/registry/pull", body ?? {}),
   runtimeImagesPullStatus: () => get<RuntimeImagePullTask>("/runtime-images/registry/pull-status"),
+  reconcileRuntimeImagesRegistry: (body?: { repair?: boolean }) =>
+    send<{
+      checked_at: string;
+      needs: unknown[];
+      nodes: Array<{
+        node_id: string;
+        node_kind: "local" | "remote";
+        inspect: string;
+        missing: Array<{ image_key: string; image_ref: string; digest: string }>;
+      }>;
+      repair_task: RuntimeImagePullTask | null;
+    }>("POST", "/runtime-images/registry/reconcile", body ?? {}),
   runtimeImage: (id: string) => get<RuntimeImageDetail>(`/runtime-images/${id}`),
   detectLocalRuntimeImage: (imageId: string, image_ref: string) =>
     send<RuntimeImageLocalCandidate>("POST", `/runtime-images/${imageId}/detect-local`, { image_ref }),
