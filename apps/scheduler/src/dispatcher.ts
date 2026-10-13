@@ -38,6 +38,7 @@ import {
   type DeviceLeaseHandle,
 } from "./domains/device/index.js";
 import { activateProvisionedJobCapabilityTokens, revokeJobCapabilityTokens } from "./domains/platform-api/tokens.js";
+import { revokeJobTokens } from "./gateway.js";
 import {
   beginEffect,
   createOrGetActiveAttempt,
@@ -1391,6 +1392,10 @@ async function runJob(jobId: string) {
       await releaseDeviceLeasesForJobQuietly(jobId, "attempt_terminal").catch(() => {});
       void lease;
     }
+    // Pair model-gateway tokens with platform capability tokens. finalizeJob
+    // already revokes both on mark_job_done; executor failures go through
+    // failExecution without that path, so finally must revoke model tokens too.
+    await revokeJobTokens(jobId, "dispatcher_cleanup").catch(() => {});
     if (platformCapability) {
       await revokeJobCapabilityTokens(jobId).catch(() => {});
       platformCapability = null;
