@@ -188,6 +188,7 @@ POST /runtime-images/import
 POST /runtime-images/manual-digest
 POST /runtime-images/registry/apply
 POST /runtime-images/registry/pull
+POST /runtime-images/registry/reconcile
 POST /runtime-images/registry/sync
 POST /runtime-image-versions/:id/rescan
 POST /runtime-image-versions/:id/status
@@ -386,6 +387,7 @@ POST /runtime-images/import
 POST /runtime-images/manual-digest
 POST /runtime-images/registry/apply
 POST /runtime-images/registry/pull
+POST /runtime-images/registry/reconcile
 POST /runtime-images/registry/sync
 POST /runtime-images/{id}/adopt-local
 POST /runtime-images/{id}/detect-local
