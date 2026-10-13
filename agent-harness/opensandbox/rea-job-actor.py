@@ -69,14 +69,30 @@ assert hashlib.sha256(skill['files']['SKILL.md'].encode()).hexdigest() == contex
 (ROOT / 'pulled-rea-skill.md').write_text(skill['files']['SKILL.md'])
 capability = invoke('describe_capability', {'id': 'binary.rea.cli'})
 assert capability.get('cli_capability', {}).get('tool') == 'rea', capability
-# A socket denial is observed directly inside the restricted OpenSandbox.
+# Probe a separate controlled target port, not the allowed Control/Gateway
+# endpoint. A TCP handshake alone is not an application-level egress proof.
+phase = 'tcp'
+blocked = False
+response = b''
 with socket.socket() as probe:
-    probe.settimeout(2)
+    probe.settimeout(3)
     try:
-        probe.connect((context['egress_probe_host'], 3100))
-        raise AssertionError('restricted sandbox leaked target egress')
-    except OSError:
-        pass
+        probe.connect((context['egress_probe_host'], context['egress_probe_port']))
+        phase = 'http'
+        probe.sendall(b'GET /rea-egress-control HTTP/1.1\r\nHost: rea-egress-control\r\nConnection: close\r\n\r\n')
+        while len(response) < 8192:
+            chunk = probe.recv(4096)
+            if not chunk:
+                break
+            response += chunk
+    except (TimeoutError, ConnectionRefusedError, ConnectionResetError):
+        blocked = True
+    else:
+        assert context['egress_probe_marker'].encode() not in response, 'restricted sandbox leaked target HTTP egress'
+        raise AssertionError('egress probe returned an unexpected response instead of a transport denial')
+assert context['egress_probe_marker'].encode() not in response, 'restricted sandbox leaked target HTTP egress'
+assert blocked, 'restricted target probe must be denied'
+invoke('emit_progress', {'message': 'REA_EGRESS_BLOCKED phase=' + phase})
 
 (ROOT / 'sample_elf').write_bytes(base64.b64decode((ROOT / 'sample_elf.base64').read_bytes(), validate=True))
 (ROOT / 'sample_elf').chmod(0o700)
