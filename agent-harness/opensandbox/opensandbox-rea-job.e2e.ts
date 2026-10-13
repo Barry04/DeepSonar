@@ -72,7 +72,7 @@ try {
   });
   model = await startReaJobModel();
   const [{ default: Fastify }, database, runtime, dispatcher, platform, gateway, credentials, snapshotHelpers,
-    { DEFAULT_FINDING_PROTOCOL }, assets, { scanSkillSourceRepo }, { admitCliCapabilities }, lifecycle, { reapOnce }] = await Promise.all([
+    { DEFAULT_FINDING_PROTOCOL }, assets, { scanSkillSourceRepo }, { admitCliCapabilities }, lifecycle, { reapOnce }, workers] = await Promise.all([
     import(schedulerRequire.resolve("fastify")), import("../../apps/scheduler/src/db.js"), import("../../apps/scheduler/src/runtime.js"),
     import("../../apps/scheduler/src/dispatcher.js"), import("../../apps/scheduler/src/domains/platform-api/index.js"),
     import("../../apps/scheduler/src/gateway.js"), import("../../apps/scheduler/src/credentials.js"),
@@ -80,9 +80,18 @@ try {
     import("../../apps/scheduler/src/domains/shared-assets/index.js"), import("../../apps/scheduler/src/skill-sources.js"),
     import("../../apps/scheduler/src/domains/cli-capability/admit.js"),
     import("../../apps/scheduler/src/domains/job-lifecycle/index.js"), import("../../apps/scheduler/src/reaper.js"),
+    import("../../apps/scheduler/src/domains/worker-nodes/index.js"),
   ]);
   sql = database.sql; runner = runtime.runner;
   await database.migrate();
+  // Match Scheduler boot: an empty isolated DB has no local execution worker
+  // until the production bootstrap registers the configured OpenSandbox.
+  const localWorker = await workers.seedLocalWorkerNode();
+  assert.ok(localWorker, "REA_JOB_RUNTIME_UNAVAILABLE: configured local OpenSandbox worker was not seeded");
+  const dispatchable = (await workers.listWorkerNodes()).find((worker) => worker.id === localWorker.id);
+  assert.ok(dispatchable && workers.workerIsDispatchable(dispatchable, Date.now(), 60_000, { requireLocal: true }),
+    "REA_JOB_RUNTIME_UNAVAILABLE: local worker has no dispatchable capacity");
+  report.worker = { id: localWorker.id, kind: localWorker.kind, capacity: localWorker.capacity };
   app = Fastify({ logger: false });
   platform.registerPlatformControlRoutes(app);
   gateway.registerGateway(app);
