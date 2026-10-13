@@ -203,6 +203,7 @@ const ROUTE_SCOPES: Record<string, string> = {
   "POST /runtime-images/registry/sync": "images:manage",
   "POST /runtime-images/registry/apply": "images:manage",
   "POST /runtime-images/registry/pull": "images:manage",
+  "POST /runtime-images/registry/reconcile": "images:manage",
   "GET /runtime-images/registry/pull-status": "images:read",
   "POST /runtime-images/:id/detect-local": "images:read",
   "POST /runtime-images/:id([0-9a-fA-F-]{36})/detect-local": "images:read",

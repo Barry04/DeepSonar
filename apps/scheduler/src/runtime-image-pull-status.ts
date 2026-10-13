@@ -6,9 +6,19 @@ export type RuntimeImagePullTaskStatus = RuntimeImagePullItemStatus | "interrupt
 export interface RuntimeImagePullItem {
   image_key: string;
   image_ref: string;
+  /** Immutable digest targeted by this item; never drifts to latest on retry. */
+  target_digest?: string | null;
   status: RuntimeImagePullItemStatus;
   error: string | null;
   error_code?: string | null;
+  /** Classified pull failure (timeout/transport/auth/digest_missing/disk_full/other). */
+  failure_class?: string | null;
+  /** Pull attempts consumed for this item (unified budget, max 2). */
+  attempts?: number;
+  /** Extra retries beyond the first attempt (0 or 1 under unified budget). */
+  retry_count?: number;
+  /** Last attempt timeout budget in seconds. */
+  timeout_budget_sec?: number | null;
   started_at?: string | null;
   finished_at?: string | null;
 }
@@ -25,6 +35,10 @@ export interface RuntimeImagePullTask {
   error?: string | null;
   total: number;
   completed: number;
+  /** Items that finished successfully (subset of completed). */
+  succeeded?: number;
+  /** Items that finished with failure (subset of completed). */
+  failed?: number;
   items: RuntimeImagePullItem[];
 }
 
@@ -41,6 +55,8 @@ export interface RuntimeImagePullStatusView {
   error: string | null;
   total: number;
   completed: number;
+  succeeded: number;
+  failed: number;
   items: Array<RuntimeImagePullItem & { phase: string; error_code: string | null }>;
   checked_at: string;
 }
@@ -122,9 +138,23 @@ function rowToTask(row: Record<string, unknown>): RuntimeImagePullTask {
     error: row.error == null ? null : String(row.error),
     total: Number(row.total ?? 0),
     completed: Number(row.completed ?? 0),
+    succeeded: Number(row.succeeded ?? countItemStatus(items, "succeeded")),
+    failed: Number(row.failed ?? countItemStatus(items, "failed")),
     items,
   };
 }
+
+function countItemStatus(items: readonly RuntimeImagePullItem[], status: RuntimeImagePullItemStatus): number {
+  return items.filter((item) => item.status === status).length;
+}
+
+/** Recompute succeeded/failed/completed from item statuses (completed = terminal items). */
+export function recountRuntimeImagePullTaskCounts(task: RuntimeImagePullTask): void {
+  task.succeeded = countItemStatus(task.items, "succeeded");
+  task.failed = countItemStatus(task.items, "failed");
+  task.completed = task.succeeded + task.failed;
+}
+
 
 export function createSqlRuntimeImagePullTaskStore(
   db: typeof sql = sql,
@@ -251,6 +281,8 @@ export function idleRuntimeImagePullStatus(checkedAt = new Date().toISOString())
     error: null,
     total: 0,
     completed: 0,
+    succeeded: 0,
+    failed: 0,
     items: [],
     checked_at: checkedAt,
   };
@@ -270,6 +302,8 @@ export function toRuntimeImagePullStatusView(
     interrupt_reason: task.interrupt_reason ?? null,
     error_code: task.error_code ?? null,
     error: task.error ?? null,
+    succeeded: task.succeeded ?? countItemStatus(task.items, "succeeded"),
+    failed: task.failed ?? countItemStatus(task.items, "failed"),
     checked_at: checkedAt,
     items: task.items.map((item) => ({
       ...item,

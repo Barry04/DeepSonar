@@ -2035,6 +2035,14 @@ const OPS: Op[] = [
     },
   },
   {
+    method: "post",
+    path: "/runtime-images/registry/reconcile",
+    summary: "对账运行时镜像在各节点的本地版本",
+    description: "默认只读：比对平台当前所需的不可变 digest 与各节点本地已有镜像，返回缺失项。请求体 `repair: true` 时对缺失 digest 发起受治理的定向拉取（digest 不变，返回 202 与拉取任务）。仅 unscoped/admin actor；项目限定 token 返回 403 PROJECT_SCOPE_FORBIDDEN。",
+    scope: "images:manage",
+    tags: ["Runtime Images"],
+  },
+  {
     method: "get",
     path: "/runtime-images/registry/pull-status",
     summary: "查询运行时镜像异步拉取状态",

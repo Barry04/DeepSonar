@@ -28,6 +28,7 @@ import {
   preferredPullItem,
   projectBindingQueuedNotice,
   shouldKeepPollingPullStatus,
+  pullCounts,
   pullHeadline,
   pullItemStatusLabel,
   pullPurposeLabel,
@@ -981,22 +982,58 @@ export function RuntimeImagesPage() {
                   {pullStatus.error_code ? ` · ${pullStatus.error_code}` : ""}
                 </p>
               </div>
-              <span className="font-mono text-xs text-zinc-400">{pullStatus.completed}/{pullStatus.total}</span>
+              <span className="font-mono text-xs text-zinc-400">
+                {(() => {
+                  const counts = pullCounts(pullStatus);
+                  return `${counts.succeeded}✓ ${counts.failed}✗ / ${counts.total}`;
+                })()}
+              </span>
             </div>
             <div className="mt-3 space-y-1 text-xs text-zinc-400">
               {pullStatus.items.map((item) => (
                 <div key={`${item.image_key}:${item.image_ref}`} className="flex items-start justify-between gap-3">
                   <span className="min-w-0 break-words" title={item.image_ref}>
                     {item.image_key} · {shortImageRef(item.image_ref)}
+                    {item.target_digest ? ` · ${shortImageRef(`x@${item.target_digest}`)}` : ""}
+                    {item.retry_count ? ` · 重试 ${item.retry_count}` : ""}
                   </span>
                   <span className={`max-w-[58%] break-words text-right ${item.status === "failed" ? "text-red-300" : item.status === "succeeded" ? "text-emerald-300" : "text-zinc-500"}`}>
                     {item.status === "failed"
-                      ? `${item.error_code ? `${item.error_code} · ` : ""}${item.error || "失败：Scheduler 未返回具体原因"}`
+                      ? `${item.failure_class ? `${item.failure_class} · ` : ""}${item.error_code ? `${item.error_code} · ` : ""}${item.error || "失败：Scheduler 未返回具体原因"}`
                       : `${pullItemStatusLabel(item.status)}${formatPullElapsed(item.started_at ?? null, item.finished_at ?? null) ? ` · ${formatPullElapsed(item.started_at ?? null, item.finished_at ?? null)}` : ""}`}
                   </span>
                 </div>
               ))}
             </div>
+            {pullStatus.status === "failed" && pullStatus.items.some((item) => item.status === "failed") && (
+              <div className="mt-3">
+                <button
+                  className="secondary-button"
+                  disabled={busy !== null}
+                  onClick={() => {
+                    const failedItems = pullStatus.items
+                      .filter((item) => item.status === "failed")
+                      .map((item) => ({ image_key: item.image_key, image_ref: item.image_ref }));
+                    void (async () => {
+                      setBusy("registry-pull");
+                      setError(null);
+                      try {
+                        const result = await api.pullRuntimeImagesRegistry({ items: failedItems });
+                        setPullStatus(result.task);
+                        const counts = pullCounts(result.task);
+                        setNotice(`已定向重拉失败项：${counts.total} 个（digest 不变）`);
+                      } catch (cause) {
+                        setError(cause instanceof Error ? cause.message : String(cause));
+                      } finally {
+                        setBusy(null);
+                      }
+                    })();
+                  }}
+                >
+                  仅重拉失败项
+                </button>
+              </div>
+            )}
           </div>
         </section>
       )}
