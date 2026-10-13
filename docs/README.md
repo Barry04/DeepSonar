@@ -41,10 +41,10 @@
 | [RUNTIME_TOOL_MANUALS.md](RUNTIME_TOOL_MANUALS.md) | **as-built**（#588） | 14 个官方镜像的离线工具手册契约、发现方式、构建与验收门禁 |
 | [语言服务器能力](LANGUAGE_SERVER_CAPABILITIES.md) | #604 受治理 `language-server.clangd`（phase 1） |
 | [通用 CLI 能力包](CLI_CAPABILITIES.md) | #611 受治理通用 CLI（`deepsonar.cli-capability/v1`，phase 1） |
-| [REA CLI 深度二进制解析](REA_CLI_CAPABILITIES.md) | **进行中**（#718 PR3）：amd64 实跑+行为门禁+体积预算；项目目录种子+Job 路径门禁；arm64/OCI digest/reverse workflow 跟进 |
+| [REA CLI 深度二进制解析](REA_CLI_CAPABILITIES.md) | **门禁已接线，实测/首发待证据**（#718）：原生双架构 OCI、真实 OpenSandbox Job、reverse 发布与不可变 catalog 链；保持项目边界 |
 | [Agent Runtime Profiles](AGENT_RUNTIME_PROFILES.md) | #613 Provider / 模型 / CLI 统一运行时 Profile（`deepsonar.agent-runtime-profile/v1`，phase 1） |
 | [SHARED_ASSET_BLOB_STORE.md](SHARED_ASSET_BLOB_STORE.md) | **as-built**（#41） | 共享资产 BlobStore fs\|s3 |
-| [RELEASE_RUNTIME_IMAGES.md](RELEASE_RUNTIME_IMAGES.md) | **运维/发布** | `v*` tag / release.yml；双架构缓存复用须证明 runnable payload 一致；v0.5.4 待发布，reverse 发布 job / 证据仍阻塞 |
+| [RELEASE_RUNTIME_IMAGES.md](RELEASE_RUNTIME_IMAGES.md) | **运维/发布** | `v*` tag / release.yml；双架构缓存复用须证明 runnable payload 一致；v0.5.4 待发布；reverse 发布 job 已接线，成功运行 / OCI / 准入证据仍是硬门 |
 | [ONE_CLICK_DEPLOYMENT.md](ONE_CLICK_DEPLOYMENT.md) | **运维/发布** | Compose 一键部署与生产拓扑 |
 | [RELEASE_READINESS_POST_v0.4.4.md](RELEASE_READINESS_POST_v0.4.4.md) | **运维/发布** | v0.4.4→当前 main 升级/部署/合并后验收闭环（#582）；区分代码/CI 已核实与实机延期 |
 

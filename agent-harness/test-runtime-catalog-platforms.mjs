@@ -19,9 +19,11 @@ import {
 import { assertCatalogMatchesRuntimeSources, compareCatalogVersionLabels } from "./check-runtime-catalog-platforms.mjs";
 
 const platforms = ["linux/amd64", "linux/arm64"];
-const imageKeys = ["chrome", "clickhouse"].flatMap((family) => (
-  ["audit", "test", "fuzz"].map((role) => `deepsonar-${family}-${role}`)
-));
+const imageKeys = [
+  ...["chrome", "clickhouse"].flatMap((family) =>
+    ["audit", "test", "fuzz"].map((role) => `deepsonar-${family}-${role}`)),
+  "deepsonar-reverse",
+];
 const repositoryPrefix = "ghcr.io/summersec";
 const imageMediaType = "application/vnd.oci.image.manifest.v1+json";
 const indexMediaType = "application/vnd.oci.image.index.v1+json";
@@ -283,11 +285,11 @@ function checkFinal(fixture, inspectManifest = inspector(fixture.manifests).insp
   return assertCatalogMatchesRuntimeSources({ ...fixture, inspectManifest });
 }
 
-test("final catalog proves all six products and all twelve tested platform children", () => {
+test("final catalog proves all seven products and all fourteen tested platform children", () => {
   const fixture = finalCatalogFixture();
   const mock = inspector(fixture.manifests);
-  assert.equal(fixture.builds.length, 12);
-  assert.equal(checkFinal(fixture, mock.inspectManifest), 6);
+  assert.equal(fixture.builds.length, 14);
+  assert.equal(checkFinal(fixture, mock.inspectManifest), 7);
   assert.deepEqual(new Set(mock.calls), new Set(fixture.manifests.keys()), "every source and every available channel must be inspected");
 });
 
@@ -306,7 +308,7 @@ test("final catalog accepts differing older history without inspecting unselecte
   const fixture = finalCatalogFixture();
   const historical = differentCatalogVersion(fixture, "0.4.16");
   const mock = inspector(fixture.manifests);
-  assert.equal(checkFinal(fixture, mock.inspectManifest), 6);
+  assert.equal(checkFinal(fixture, mock.inspectManifest), 7);
   assert.ok(Object.values(historical.registry_refs).every((imageRef) => !mock.calls.includes(imageRef)));
 });
 
@@ -324,7 +326,7 @@ for (const matches of [true, false]) {
     delete current.registry_refs.dockerhub;
     current.registry_evidence.dockerhub = { available: false, provenance: "unavailable", reason: "credentials_missing" };
     if (matches) fixture.manifests.set(historical.registry_refs.dockerhub, index({ "linux/amd64": digest(100), "linux/arm64": digest(101) }));
-    if (matches) assert.equal(checkFinal(fixture), 6);
+    if (matches) assert.equal(checkFinal(fixture), 7);
     else assertFailClosed(() => checkFinal(fixture), /dockerhub.*does not match tested platform manifests/);
   });
 }
@@ -335,7 +337,7 @@ for (const staleLatest of [false, true]) {
     fixture.catalog.images[0].versions[0].version = staleLatest ? "0.5.9" : "0.5.10";
     differentCatalogVersion(fixture, staleLatest ? "0.5.10" : "0.5.9");
     if (staleLatest) assertFailClosed(() => checkFinal(fixture), /does not match tested platform manifests/);
-    else assert.equal(checkFinal(fixture), 6);
+    else assert.equal(checkFinal(fixture), 7);
   });
 }
 
@@ -345,7 +347,7 @@ for (const root of [190, 800]) {
     fixture.catalog.images[0].versions[0].version = "0.5.10";
     differentCatalogVersion(fixture, "0.05.010", root);
     assert.equal(compareCatalogVersionLabels("0.5.10", "0.05.010"), 0);
-    if (root < 200) assert.equal(checkFinal(fixture), 6);
+    if (root < 200) assert.equal(checkFinal(fixture), 7);
     else assertFailClosed(() => checkFinal(fixture), /does not match tested platform manifests/);
   });
 }
@@ -355,7 +357,7 @@ test("latest selection filters out rows for unrelated platforms before ordering"
   const otherPlatform = differentCatalogVersion(fixture, "0.6.0");
   otherPlatform.platforms = ["linux/s390x"];
   const mock = inspector(fixture.manifests);
-  assert.equal(checkFinal(fixture, mock.inspectManifest), 6);
+  assert.equal(checkFinal(fixture, mock.inspectManifest), 7);
   assert.ok(Object.values(otherPlatform.registry_refs).every((imageRef) => !mock.calls.includes(imageRef)));
 });
 
@@ -506,7 +508,7 @@ for (const outcome of ["match", "stale", "source failure", "catalog failure", "m
 for (const family of ["Chrome", "ClickHouse"]) {
   for (const outcome of ["match", "stale", "source failure", "catalog failure"]) {
     test(`${family} cache-hit workflow ${outcome} reaches only its authorized assembly branch`, posixMockOptions, () => {
-      const name = `${family.toLowerCase()}-test`;
+      const name = family === "Reverse" ? "reverse" : `${family.toLowerCase()}-test`;
       const fixture = reuseFixture(`deepsonar-${name}`);
       if (outcome === "stale") fixture.manifests.set(fixture.catalogVersion.image_ref, index({ "linux/amd64": digest(51), "linux/arm64": digest(52) }));
       if (outcome === "source failure") fixture.manifests.set(fixture.platformSources["linux/amd64"], new Error("source inspection failed"));

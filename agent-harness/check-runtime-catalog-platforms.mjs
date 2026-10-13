@@ -7,8 +7,11 @@ import {
   samePlatformDigests,
 } from "./runtime-platform-manifests.mjs";
 
-const IMAGE_KEYS = ["chrome", "clickhouse"].flatMap((family) =>
-  ["audit", "test", "fuzz"].map((role) => `deepsonar-${family}-${role}`));
+const IMAGE_KEYS = [
+  ...["chrome", "clickhouse"].flatMap((family) =>
+    ["audit", "test", "fuzz"].map((role) => `deepsonar-${family}-${role}`)),
+  "deepsonar-reverse",
+];
 const PLATFORMS = ["linux/amd64", "linux/arm64"];
 const CHANNELS = ["github", "dockerhub", "aliyun-acr"];
 
@@ -51,7 +54,7 @@ function selectedVersion(versions, channel, platform) {
 export function assertCatalogMatchesRuntimeSources({ catalog, builds, repositoryPrefix, inspectManifest }) {
   if (!repositoryPrefix || /[\s@]/.test(repositoryPrefix)) fail("repository prefix is required");
   if (!Array.isArray(builds) || builds.length !== IMAGE_KEYS.length * PLATFORMS.length) {
-    fail("expected all twelve native-smoke build artifacts");
+    fail("expected all fourteen native-smoke build artifacts");
   }
   const sourcesByImage = new Map(IMAGE_KEYS.map((key) => [key, {}]));
   for (const build of builds) {
@@ -112,5 +115,5 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     builds,
     repositoryPrefix: option("--repository-prefix"),
   });
-  console.log(`Verified ${count} catalog products against all twelve native-smoke platform manifests`);
+  console.log(`Verified ${count} catalog products against all fourteen native-smoke platform manifests`);
 }
