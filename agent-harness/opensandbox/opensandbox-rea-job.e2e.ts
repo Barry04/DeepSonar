@@ -86,7 +86,8 @@ try {
   });
   model = await startReaJobModel();
   const [{ default: Fastify }, database, runtime, dispatcher, platform, gateway, credentials, snapshotHelpers,
-    { DEFAULT_FINDING_PROTOCOL }, assets, { scanSkillSourceRepo }, { admitCliCapabilities }, lifecycle, { reapOnce }, workers] = await Promise.all([
+    { DEFAULT_FINDING_PROTOCOL }, assets, { scanSkillSourceRepo }, { admitCliCapabilities }, lifecycle, { reapOnce }, workers,
+    platformTokens] = await Promise.all([
     import(schedulerRequire.resolve("fastify")), import("../../apps/scheduler/src/db.js"), import("../../apps/scheduler/src/runtime.js"),
     import("../../apps/scheduler/src/dispatcher.js"), import("../../apps/scheduler/src/domains/platform-api/index.js"),
     import("../../apps/scheduler/src/gateway.js"), import("../../apps/scheduler/src/credentials.js"),
@@ -95,10 +96,22 @@ try {
     import("../../apps/scheduler/src/domains/cli-capability/admit.js"),
     import("../../apps/scheduler/src/domains/job-lifecycle/index.js"), import("../../apps/scheduler/src/reaper.js"),
     import("../../apps/scheduler/src/domains/worker-nodes/index.js"),
+    import("../../apps/scheduler/src/domains/platform-api/tokens.js"),
   ]);
   sql = database.sql; runner = runtime.runner;
   drainJobs = () => dispatcher.drainInFlight(60_000);
-  cancelJob = (id) => lifecycle.createSqlJobLifecycleApplication().cancelJob(id, "rea-acceptance-cleanup");
+  // Mirror POST /jobs/:id/cancel: lifecycle status change alone does not destroy
+  // the OpenSandbox or revoke tokens; production route side effects do.
+  const cancelJobWithCleanup = async (id: string, reason: string) => {
+    const job = await lifecycle.createSqlJobLifecycleApplication().cancelJob(id, reason);
+    if (job?.sandbox_id) {
+      await runner.destroy({ sandboxId: String(job.sandbox_id) }).catch(() => undefined);
+    }
+    await gateway.revokeJobTokens(id, "cancelled").catch(() => undefined);
+    await platformTokens.revokeJobCapabilityTokens(id, "cancelled").catch(() => undefined);
+    return job;
+  };
+  cancelJob = (id) => cancelJobWithCleanup(id, "rea-acceptance-cleanup");
   await database.migrate();
   // Match Scheduler boot: an empty isolated DB has no local execution worker
   // until the production bootstrap registers the configured OpenSandbox.
@@ -196,7 +209,7 @@ try {
           const host = await runner.ensureHost({ sandboxId: row.sandbox_id });
           assert.equal((await host.run(`kill -0 ${pid}`)).exitCode, 0, "must interrupt a still-running REA process");
           interrupted = true;
-          if (mode === "cancel") await lifecycle.createSqlJobLifecycleApplication().cancelJob(id, "rea-acceptance");
+          if (mode === "cancel") await cancelJobWithCleanup(id, "rea-acceptance");
           else {
             // Expire the real Scheduler deadline only after durable checkpoint.
             await sql`UPDATE jobs SET timeout_sec=1,started_at=now()-interval '5 minutes' WHERE id=${id}`;

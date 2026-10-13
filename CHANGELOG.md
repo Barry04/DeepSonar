@@ -2,6 +2,7 @@
 
 ### 修复
 
+- REA Job 验收的 cancel 路径改为对齐生产 `POST /jobs/:id/cancel` 副作用（#718）：lifecycle `cancelJob` 只改库状态；验收在取消后立即 `runner.destroy` 并吊销模型/capability token，否则 OpenSandbox 仍被 300s sleep 的 REA actor 占用，`drainInFlight` 超时后被误判为 sandbox leaked。timeout 仍走 Reaper（本就会销毁沙箱）。
 - 修复 Dispatcher 在 executor 异常终态（例如 Agent 未调用 `mark_job_done` 走 `failExecution`）只吊销平台 capability token、不吊销模型网关短期 `job_tokens` 的问题（#718）：`finalizeJob` 成功路径本来会成对吊销两者，但失败路径此前仅在 `finally` 里吊销 capability。现于 attempt `finally` 中无条件调用 `revokeJobTokens(..., "dispatcher_cleanup")`，与 capability 吊销配对；重复吊销对已非 active 的 token 是幂等的。同步强化 `job-capability-revocation` / `executor-real` 源码契约测试，并将前者接入 `ci:unit:executor-real`。
 - 修复非 root 运行镜像（如 `deepsonar-reverse`，`USER deepsonar`）挂载共享资产后 Job 在写入 workspace 文件时报 `Upload failed (status=500)` 的问题（#718）：Docker / kubelet 为只读挂载点 `/workspace/.deepsonar/shared` 自动创建的父目录 `/workspace/.deepsonar` 属 root:root 0755，guest 无法写入 `runtime-manifest.json` 与 `shared-assets-catalog.json`。OpenSandbox provision 现以 guest 身份探测该父目录可写性，不可写时仅对该目录做 root 修复（Docker 走 Engine `docker exec -u 0`，Kubernetes 走 execd uid 0；先尝试 chown 到 guest uid/gid，`drop_capabilities=ALL` 下回退为属主可执行的 `chmod 1777`），修复后复测失败则以 `RuntimeImageContractError` fail closed，不再暴露为误导性的上传 5xx。共享资产挂载本身保持只读、root 所有，root 镜像与已自带可写父目录的镜像不触发修复。
 - REA Job 验收（`opensandbox-rea-job.e2e.ts`）的一次性画布通过生产收敛控制 `hub_paused` 暂停 Hub：Verify rework / 失败会强制唤醒 Hub，而隔离验收库不准入 Hub 运行镜像 `deepsonar-base`；不伪造镜像准入，并在 `does_not_prove` 中声明 `hub-wake-after-verify`，断言验收期间未派发 Hub。
