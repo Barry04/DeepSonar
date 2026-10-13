@@ -55,6 +55,19 @@ try {
   report.tool_manifest = { sha256: toolManifestSha, manual: toolManifest.manual };
   report.image = { requested: imageRef, inspected_id: image.Id, architecture: image.Architecture, identity_kind: imageRef.includes("@") ? "published-manifest" : "local-config-id" };
 
+  // Independent Verify materializes shared-assets via DockerSharedAssetsVolumeManager,
+  // which inspects the helper with --pull=never. Provision the same pin deploy/CI use.
+  const helperImage = (process.env.DEEPSONAR_SHARED_ASSETS_HELPER_IMAGE?.trim()
+    || "docker.io/library/busybox@sha256:fc6dddc4c44b1bfe37f41cae8e67d1693828e8f42a91862816d7953e2c9d3f23");
+  try {
+    execFileSync("docker", ["image", "inspect", helperImage], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  } catch {
+    execFileSync("docker", ["pull", helperImage], { encoding: "utf8", stdio: "inherit" });
+  }
+  execFileSync("docker", ["image", "inspect", helperImage], { encoding: "utf8" });
+  process.env.DEEPSONAR_SHARED_ASSETS_HELPER_IMAGE = helperImage;
+  report.shared_assets_helper = { image: helperImage };
+
   const postgres = (await import(schedulerRequire.resolve("postgres"))).default;
   const adminUrl = new URL(process.env.TEST_DATABASE_URL!);
   adminUrl.pathname = "/postgres"; adminUrl.search = "";
