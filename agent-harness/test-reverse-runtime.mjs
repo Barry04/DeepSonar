@@ -2,6 +2,7 @@
 /**
  * Static gate for deepsonar-reverse definition (#718).
  * PR2: also checks amd64 measurement ledger + provisional maxSizeMiB.
+ * PR3: also checks the schema.sql official catalog seed (project opt-in).
  * Does not build the OCI image (requires docker / workflow scope follow-up).
  */
 import { createHash } from "node:crypto";
@@ -18,6 +19,7 @@ const fail = (msg) => {
 const config = JSON.parse(readFileSync(resolve(root, "agent-harness/reverse-runtime.json"), "utf8"));
 const dockerfile = readFileSync(resolve(root, "deploy/Dockerfile.agent-reverse"), "utf8");
 const envScript = readFileSync(resolve(root, "deploy/reverse-env.sh"), "utf8");
+const schemaSql = readFileSync(resolve(root, "database/schema.sql"), "utf8");
 const skillPath = resolve(root, config.skill?.path ?? "skills/deepsonar-rea-cli/SKILL.md");
 if (!existsSync(skillPath)) fail(`skill missing: ${skillPath}`);
 const skillBody = readFileSync(skillPath, "utf8");
@@ -88,9 +90,12 @@ if (measurements.schema !== "deepsonar.reverse.amd64-measurements/v1") fail("mea
 if (!Array.isArray(measurements.queries) || measurements.queries.length < 8) fail("measurements must list amd64 query timings");
 if (measurements.image_size?.provisional_maxSizeMiB !== 2800) fail("measurements provisional_maxSizeMiB drift");
 if (measurements.arm64?.status !== "pending") fail("arm64 must remain pending until measured");
+const seedLine = schemaSql.split("\n").find((line) => line.trimStart().startsWith("('deepsonar-reverse',"));
+if (!seedLine) fail("schema.sql must seed deepsonar-reverse (PR3 project opt-in catalog)");
+if (!/'official',\s*true,\s*true,\s*true\),?$/.test(seedLine)) fail("deepsonar-reverse seed must be official + project_opt_in + enabled");
 if (!existsSync(resolve(root, "agent-harness/fixtures/reverse-sample/sample.c"))) {
   fail("public reverse sample source missing");
 }
 
 
-console.log("reverse-runtime static gate passed (measurements ledger present; no OCI image build in this check)");
+console.log("reverse-runtime static gate passed (measurements ledger + schema seed present; no OCI image build in this check)");

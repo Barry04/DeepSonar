@@ -469,6 +469,10 @@ if (reverseImage) {
   expect(Array.isArray(reverseImage.versions), "deepsonar-reverse registry versions 必须是数组");
 }
 expect(reverseConfig.contract === "deepsonar.runtime.contract/v1", "Reverse runtime contract drift");
+expect(
+  /\('deepsonar-reverse', 'DeepSonar Reverse', '[^']+', 'SummerSec', 'https:\/\/github\.com\/SummerSec\/DeepSonar', 'official', true, true, true\)/.test(schema),
+  "schema.sql 必须以 official/project_opt_in/enabled 种子 deepsonar-reverse（#718 PR3）",
+);
 expect(reverseConfig.project_opt_in === true, "Reverse config must remain project_opt_in");
 expect(reverseConfig.platforms?.join(",") === "linux/amd64,linux/arm64", "Reverse must declare both release platforms");
 expect(reverseConfig.downloads?.ghidra?.version === "12.1.4", "Reverse must pin Ghidra 12.1.4");

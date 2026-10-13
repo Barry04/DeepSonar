@@ -1,6 +1,6 @@
 # REA CLI 深度二进制解析能力（#718）
 
-> **状态：进行中（PR2 已完成 amd64 实跑与行为门禁）**。镜像矩阵见 [`RUNTIME_ROLE_IMAGE_MATRIX.md`](RUNTIME_ROLE_IMAGE_MATRIX.md)；通用 CLI 包见 [`CLI_CAPABILITIES.md`](CLI_CAPABILITIES.md)；工具手册契约见 [`RUNTIME_TOOL_MANUALS.md`](RUNTIME_TOOL_MANUALS.md)。
+> **状态：进行中（PR3 已完成项目目录种子与 Job 路径门禁；PR2 已完成 amd64 实跑与行为门禁）**。镜像矩阵见 [`RUNTIME_ROLE_IMAGE_MATRIX.md`](RUNTIME_ROLE_IMAGE_MATRIX.md)；通用 CLI 包见 [`CLI_CAPABILITIES.md`](CLI_CAPABILITIES.md)；工具手册契约见 [`RUNTIME_TOOL_MANUALS.md`](RUNTIME_TOOL_MANUALS.md)。
 
 ## 目标
 
@@ -60,12 +60,32 @@ Hub 通过 Intent `cli_capability_ids` 提案；Scheduler `admitCliCapabilities`
 - 伪代码 / 静态值流 ≠ 原始源码 / 动态证明 / 已验证漏洞。
 - 完整镜像内冷启动与 OCI 压缩体积仍待首次 reverse 镜像构建。
 
+## 项目启用（PR3）
+
+- `database/schema.sql` 官方目录种子包含 `deepsonar-reverse`：`official=true`、`project_opt_in=true`、`enabled=true`，描述与 `deploy/runtime-image-registry.json` 一致；`db:rebuild` 回填同一条种子。`DEFAULT_RUNTIME_IMAGE_BY_ROLE` 不变（Test→kali-minimal、Audit→audit、其余→base），reverse 永不成为角色默认。
+- 按 #691 当前模型，`project_opt_in` 是元数据：启动 warmup 跳过（`isStartupRequiredRuntimeImage=false`），全局作用域 real 预检返回 `RUNTIME_IMAGE_PROJECT_SCOPE_REQUIRED`，必须在具体项目内评估。
+- 项目作用域内官方镜像缺行即默认可用；项目可经 `PUT /projects/:id/runtime-images/:imageId` 显式排除，排除后预检返回 `RUNTIME_IMAGE_PROJECT_NOT_ENABLED`，Job 创建 `resolveRuntimeImageForJob` 同样拒绝。
+- 真正可执行仍取决于平台目录中存在 trusted digest；首个 reverse digest 发布前 registry `versions: []`，预检会如实报告镜像不可用。
+
+## 受治理 Job 路径（PR3）
+
+无 docker 时用真实契约 + 夹具覆盖整条路径（`apps/scheduler/src/domains/cli-capability/rea-cli-job-e2e.test.ts`）：
+
+1. **Skill 发现/拉取**：按受信 Skill 源同步方式扫描 `skills/`，`list_available_skills` / `search_skills` 返回 `deepsonar-rea-cli` 的 selector 与 content hash；`pull_skill` 只在 hash 匹配时返回文件，拉到的 `SKILL.md` 字节哈希必须等于 `reverse-runtime.json` 的 `skill.content_hash`；过期 hash、宽 selector、未知模块一律拒绝。
+2. **能力发现与准入**：`search_capabilities` / `describe_capability` 能找到 `binary.rea.cli`；`admitCliCapabilities` 只在 `deepsonar-reverse` 冻结，manifest 的 `tool_version` / timeout 与 `reverse-runtime.json` 一致；mobile/base 等镜像返回 `incompatible_image`，安装请求返回 `install_forbidden`。
+3. **Evidence 归一化**：成功 / 非零 / 截断 / 部分 JSON / 超时 / 取消逐一贯穿到 Fact，不完整结果在描述与 Artifact 扩展中保持 `inconclusive`；清理前保留 `evidence_ref`，删除 Ghidra 临时工程。
+4. **Fact/Artifact 提交**：`buildReaCliFactProposal` 把一次观察映射为 `emit_fact` 提案：不带 `verification`，claim/evidence 一律 `unknown`，原始 stdout 不进 Fact（只引用留存的 evidence），元数据进 Artifact 扩展 `binary.rea-cli`（能力 id、工具版本、exit、截断、样本 SHA-256、镜像 digest、argv）。
+5. **Verify 独立**：原始 `CliCapabilityResult` 不能当作 `emit_fact` / `emit_finding` 载荷；REA 观察 Fact 不满足结构化验证 Fact，Fact-first confirm 门返回 `insufficient`；`exit_code=0` 本身也不是 runtime proof。
+
+项目启用门禁见 `apps/scheduler/src/reverse-runtime-project-opt-in.test.ts`（种子、回填、warmup、#691 排除、预检作用域、Hub 目录投影）。
+
 ## 行为门禁（CI）
 
-Scheduler 单元测试覆盖 Evidence 归一化路径：成功、非零退出、截断、部分 JSON、超时、取消、清理计划，以及缺失能力 / 未准入镜像拒绝。
+Scheduler 单元测试覆盖 Evidence 归一化路径：成功、非零退出、截断、部分 JSON、超时、取消、清理计划，以及缺失能力 / 未准入镜像拒绝；PR3 增加上面的 Job 路径与项目启用门禁（分别接入 `ci:unit:capability-pack` / `ci:unit:cli-capability` 与 `ci:unit:runtime-images`）。
 
 ```bash
 pnpm ci:unit:cli-capability
+pnpm ci:unit:runtime-images
 node agent-harness/test-reverse-runtime.mjs
 pnpm ci:images
 ```
@@ -75,5 +95,4 @@ pnpm ci:images
 - `.github/workflows/reverse-runtime.yml` 与 `release.yml` reverse 发布 job（需 GitHub `workflow` scope）
 - 首次发布 `deepsonar-reverse` digest 后回填 registry `versions` 并用 `docker save` 校准 `maxSizeMiB`
 - arm64 native decompiler 对等实测
-- 真实 Job 端到端：Skill 拉取 → CLI → Evidence → Fact/Artifact → 独立 Verify
-- 项目显式启用前的准入放行（全局默认仍不变）
+- 首个 digest 发布后在真实沙箱跑一次 Job（契约门禁已由 PR3 覆盖，真实镜像内实跑仍待 OCI 镜像）

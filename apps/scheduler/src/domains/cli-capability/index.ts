@@ -22,12 +22,15 @@ export {
 } from "./admit.js";
 
 export {
+  REA_CLI_ARTIFACT_EXTENSION,
   REA_CLI_CAPABILITY_ID,
   REA_TOOL,
   REA_TOOL_VERSION,
   buildReaCliCapabilityResult,
+  buildReaCliFactProposal,
   isReaCliImageAdmitted,
   planReaCliCleanup,
   type ReaCliCleanupPlan,
+  type ReaCliFactContext,
   type ReaCliObservationInput,
 } from "./rea-cli-evidence.js";
