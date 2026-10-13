@@ -1610,7 +1610,8 @@ INSERT INTO runtime_images (image_key, name, description, publisher, source_url,
   ('deepsonar-clickhouse-audit', 'DeepSonar ClickHouse Audit', 'ClickHouse-backed official audit runtime; project opt-in only', 'SummerSec', 'https://github.com/SummerSec/DeepSonar', 'official', true, true, true),
   ('deepsonar-clickhouse-test', 'DeepSonar ClickHouse Test', 'ClickHouse-backed official test runtime; project opt-in only', 'SummerSec', 'https://github.com/SummerSec/DeepSonar', 'official', true, true, true),
   ('deepsonar-clickhouse-fuzz', 'DeepSonar ClickHouse Fuzz', 'ClickHouse-backed official fuzz runtime; project opt-in only', 'SummerSec', 'https://github.com/SummerSec/DeepSonar', 'official', true, true, true),
-  ('deepsonar-mobile', 'DeepSonar Mobile', '移动端审计运行时：Android JADX/apktool/bundletool/apkeep/androguard/ApkCheckPack/ADB/Frida、.so 用 binutils/radare2/LIEF、iOS libimobiledevice、OpenHarmony HAP/hdc；project opt-in；不预装 MobSF/GUI/Ghidra/IDA/DevEco/MCP', 'SummerSec', 'https://github.com/SummerSec/DeepSonar', 'official', true, true, true)
+  ('deepsonar-mobile', 'DeepSonar Mobile', '移动端审计运行时：Android JADX/apktool/bundletool/apkeep/androguard/ApkCheckPack/ADB/Frida、.so 用 binutils/radare2/LIEF、iOS libimobiledevice、OpenHarmony HAP/hdc；project opt-in；不预装 MobSF/GUI/Ghidra/IDA/DevEco/MCP', 'SummerSec', 'https://github.com/SummerSec/DeepSonar', 'official', true, true, true),
+  ('deepsonar-reverse', 'DeepSonar Reverse', '深度原生二进制解析运行时：钉死 REA CLI 6.4.0 + Ghidra 12.1.4 + 完整 JDK 21；project opt-in；CLI-only，不预装 MCP/Hopper/IDA/常驻服务；不改变全局默认', 'SummerSec', 'https://github.com/SummerSec/DeepSonar', 'official', true, true, true)
 ON CONFLICT (image_key) DO NOTHING;
 
 INSERT INTO runtime_data_layers (layer_key, name, tool_name, description, enabled) VALUES

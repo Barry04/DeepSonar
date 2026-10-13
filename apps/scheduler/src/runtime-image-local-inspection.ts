@@ -66,6 +66,7 @@ const TOOLSET_TO_RUNTIME_IMAGE_KEY: Record<string, string> = {
   "clickhouse-test": "deepsonar-clickhouse-test",
   "clickhouse-fuzz": "deepsonar-clickhouse-fuzz",
   mobile: "deepsonar-mobile",
+  reverse: "deepsonar-reverse",
 };
 
 function imageRepository(imageRef: string): string | null {

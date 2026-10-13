@@ -5,6 +5,7 @@
 import {
   CLI_UNAVAILABLE_CODE,
   CliCapabilityResult,
+  EmitFactDirectPayload,
   type CliUnavailableReason,
 } from "@deepsonar/shared-types";
 
@@ -150,4 +151,78 @@ export function planReaCliCleanup(input: {
 /** True when a frozen image key may invoke binary.rea.cli. */
 export function isReaCliImageAdmitted(imageKey: string): boolean {
   return imageKey === "deepsonar-reverse";
+}
+
+export const REA_CLI_ARTIFACT_EXTENSION = "binary.rea-cli" as const;
+
+export type ReaCliFactContext = {
+  /** REA subcommand, e.g. analyze / function / decompile / xrefs. */
+  operation: string;
+  /** Absolute sample path inside the Job workspace. */
+  sample_path: string;
+  sample_sha256?: string | null;
+  /** Frozen runtime image digest from the Job snapshot. */
+  image_digest?: string | null;
+};
+
+/**
+ * Map one governed REA observation onto an `emit_fact` proposal (Fact/Artifact path).
+ * Never attaches `verification`: Verify stays independent and only consumes structured
+ * verification Facts. Claims and evidence stay `unknown` even for a conclusive run, because
+ * pseudocode / static value flow is observation, not proof. Raw stdout is not copied in;
+ * the retained evidence_ref points at the archived JSON.
+ */
+export function buildReaCliFactProposal(
+  result: CliCapabilityResult,
+  context: ReaCliFactContext,
+): EmitFactDirectPayload {
+  const parsed = CliCapabilityResult.parse(result);
+  if (parsed.capability_id !== REA_CLI_CAPABILITY_ID) {
+    throw new Error(`buildReaCliFactProposal only accepts ${REA_CLI_CAPABILITY_ID} results`);
+  }
+  const operation = context.operation.trim() || "unknown";
+  const sampleName = context.sample_path.split("/").filter(Boolean).at(-1) ?? context.sample_path;
+  const statusLine = parsed.inconclusive
+    ? `结果不完整（reason=${parsed.unavailable_reason ?? "inconclusive"}，exit=${parsed.exit_code ?? "null"}，truncated=${parsed.truncated}），只作为部分观察归档，不得视为成功。`
+    : "得到可解析的 JSON 观察。";
+  const description = [
+    `REA CLI（${REA_CLI_CAPABILITY_ID}，${REA_TOOL} ${parsed.tool_version}）在 deepsonar-reverse 内对 ${context.sample_path} 执行 ${operation}，${statusLine}`,
+    context.sample_sha256 ? `样本 SHA-256：${context.sample_sha256}。` : "",
+    `原始输出见 ${parsed.evidence_ref}。伪代码与静态值流不等于原始源码、动态证明或已验证漏洞；结论须由独立 Verify 消费结构化 Fact 得出。`,
+  ].filter(Boolean).join("");
+  return EmitFactDirectPayload.parse({
+    title: `REA ${operation} 观察：${sampleName}`.slice(0, 200),
+    description,
+    artifact: {
+      claims: [{
+        statement: description,
+        subject: { type: "binary", location: context.sample_path, label: operation },
+        status: "unknown",
+        evidence_refs: [parsed.evidence_ref],
+      }],
+      evidence: [{
+        kind: REA_CLI_ARTIFACT_EXTENSION,
+        statement: parsed.inconclusive
+          ? `REA ${operation} 未完成或被截断的观察`
+          : `REA ${operation} JSON 观察`,
+        polarity: "unknown",
+        uri: parsed.evidence_ref,
+      }],
+      extensions: {
+        [REA_CLI_ARTIFACT_EXTENSION]: {
+          capability_id: parsed.capability_id,
+          tool: parsed.tool,
+          tool_version: parsed.tool_version,
+          operation,
+          exit_code: parsed.exit_code,
+          inconclusive: parsed.inconclusive,
+          truncated: parsed.truncated,
+          unavailable_reason: parsed.unavailable_reason,
+          sample_sha256: context.sample_sha256 ?? null,
+          image_digest: context.image_digest ?? null,
+          argv: parsed.argv,
+        },
+      },
+    },
+  });
 }
