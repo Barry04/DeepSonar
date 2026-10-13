@@ -152,8 +152,8 @@ export function isTransientRegistryTransportError(error: unknown): boolean {
 }
 
 /** Other catalog channels that already inspected the same canonical digest. Selected ref is excluded. */
-export function verifiedSameDigestChannelRefs(
-  images: readonly RuntimeImageRegistry["images"][number][],
+export function verifiedSameDigestChannelRefs<T extends EnsureCatalog["images"][number]>(
+  images: readonly T[],
   digest: string,
   selectedRef: string,
 ): string[] {

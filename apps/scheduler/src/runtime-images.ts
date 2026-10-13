@@ -53,6 +53,8 @@ import {
   localRuntimeImageMatchesRef,
   prepareRuntimeImage,
   verifiedSameDigestChannelRefs,
+  type RuntimeImageEnsureDependencies,
+  type StartRuntimeImagePullInput,
 } from "./runtime-image-ensure.js";
 export {
   assertRuntimeImageAvailable,

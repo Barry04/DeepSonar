@@ -1009,7 +1009,7 @@ export function RuntimeImagesPage() {
               <div className="mt-3">
                 <button
                   className="secondary-button"
-                  disabled={busy !== null || pullStatus.status === "running" || pullStatus.status === "queued"}
+                  disabled={busy !== null}
                   onClick={() => {
                     const failedItems = pullStatus.items
                       .filter((item) => item.status === "failed")
