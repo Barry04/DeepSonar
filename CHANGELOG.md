@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+### 修复
+
+- 修复非 root 运行镜像（如 `deepsonar-reverse`，`USER deepsonar`）挂载共享资产后 Job 在写入 workspace 文件时报 `Upload failed (status=500)` 的问题（#718）：Docker / kubelet 为只读挂载点 `/workspace/.deepsonar/shared` 自动创建的父目录 `/workspace/.deepsonar` 属 root:root 0755，guest 无法写入 `runtime-manifest.json` 与 `shared-assets-catalog.json`。OpenSandbox provision 现以 guest 身份探测该父目录可写性，不可写时仅对该目录做 root 修复（Docker 走 Engine `docker exec -u 0`，Kubernetes 走 execd uid 0；先尝试 chown 到 guest uid/gid，`drop_capabilities=ALL` 下回退为属主可执行的 `chmod 1777`），修复后复测失败则以 `RuntimeImageContractError` fail closed，不再暴露为误导性的上传 5xx。共享资产挂载本身保持只读、root 所有，root 镜像与已自带可写父目录的镜像不触发修复。
+- REA Job 验收（`opensandbox-rea-job.e2e.ts`）的一次性画布通过生产收敛控制 `hub_paused` 暂停 Hub：Verify rework / 失败会强制唤醒 Hub，而隔离验收库不准入 Hub 运行镜像 `deepsonar-base`；不伪造镜像准入，并在 `does_not_prove` 中声明 `hub-wake-after-verify`，断言验收期间未派发 Hub。
+
 ## [0.5.4] - 2026-10-13
 
 ### 发布状态

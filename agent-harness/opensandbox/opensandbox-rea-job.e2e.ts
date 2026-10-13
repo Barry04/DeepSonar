@@ -23,7 +23,7 @@ const report: Record<string, any> = {
   schema: "deepsonar.rea-job-acceptance/v1", source_revision: execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim(), started_at: new Date().toISOString(), status: "running",
   model: "deterministic-loopback-anthropic", runtime: "production-dispatcher-opensandbox",
   requested_coverage: ["real-tool-output", "job-control-api", "durable-archive", "fact-artifact", "independent-verify-gate", "job-cancel-timeout-cleanup"],
-  does_not_prove: ["vendor-model-reasoning", "production-project-enablement", "registry-admission-or-publication", "docker-host-bridge-ip-deny-under-dns-egress"], jobs: [],
+  does_not_prove: ["vendor-model-reasoning", "production-project-enablement", "registry-admission-or-publication", "docker-host-bridge-ip-deny-under-dns-egress", "hub-wake-after-verify"], jobs: [],
 };
 const saveReport = () => writeFile(path.join(reportDir, "job-acceptance.json"), JSON.stringify(report, null, 2) + "\n");
 let sql: any;
@@ -163,7 +163,13 @@ try {
     const id = randomUUID(); const canvasId = finding?.canvas_id || randomUUID();
     if (!finding) {
       await sql`INSERT INTO canvases (id,project_id,title,target_json) VALUES (${canvasId},${projectId},${`REA ${mode}`},
-        ${sql.json({ network_policy: { allow_egress: false }, effective_finding_protocol: DEFAULT_FINDING_PROTOCOL })})`;
+        ${sql.json({
+          network_policy: { allow_egress: false }, effective_finding_protocol: DEFAULT_FINDING_PROTOCOL,
+          // Verify rework/failure force-wakes Hub, which needs a trusted Hub runtime
+          // (deepsonar-base) this disposable DB never admits. Hub is out of scope:
+          // pause it through the production convergence control instead of faking admission.
+          convergence: { hub_paused: true, auto_stopped: false, paused_reason: "rea_acceptance_hub_out_of_scope" },
+        })})`;
       await sql`INSERT INTO canvas_nodes (canvas_id,node_type,title,status,body_json) VALUES (${canvasId},'root','REA acceptance','active','{}')`;
     }
     const snapshot: any = makeSnapshot(mode, extra);
@@ -270,6 +276,8 @@ try {
   assert.equal(round.proposed_verdict, "confirmed");
   assert.equal(round.final_outcome, "rework", "raw maker observations must fail the production confirmation gate");
   report.verify = round;
+  const [{ hubs }] = await sql`SELECT count(*)::int AS hubs FROM jobs WHERE project_id=${projectId} AND type='hub_reason'`;
+  assert.equal(hubs, 0, "paused acceptance canvas must not dispatch Hub");
   for (const mode of ["failure", "cancel", "timeout"]) {
     const job = await newJob(mode);
     await run(job.id, mode);
