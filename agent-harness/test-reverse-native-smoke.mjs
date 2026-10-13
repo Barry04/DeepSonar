@@ -3,14 +3,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { readFileSync, mkdtempSync, rmSync, existsSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { supportedNodeVersion, verifyIntegrity, verifyElfArchitecture, nativeArch } from './reverse-toolchain-check.mjs';
 import { assertNativePlatform, ghidraProfile, SIZE_CEILING_MIB, LIMITS } from './reverse-native-common.mjs';
-import { processTable, providerProcesses, sanitizeProcess, trackOwnedProcesses, rawOutputCapture, isGhidraAnalysisProcess, ghidraAnalysisStarted, remainingProcesses } from './reverse-native-process.mjs';
+import { processTable, providerProcesses, sanitizeProcess, trackOwnedProcesses, rawOutputCapture, isGhidraAnalysisProcess, ghidraAnalysisStarted, remainingProcesses, commandFailureSummary } from './reverse-native-process.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const linuxProc=process.platform==='linux'&&existsSync('/proc/self/stat');
@@ -64,6 +64,43 @@ test('image, helper, and harness pin the same production limits and native build
   assert(nativeBuilder.includes('ARCH_TYPE= OSDIR=linux_arm_64'));
   assert(nativeBuilder.includes('--elf "$binary" "$arch"'));
   assert.equal(SIZE_CEILING_MIB,2800); assert.equal(LIMITS.memory_bytes,4096*1024*1024);
+});
+test('image preflight verifies installed REA ownership preparation before headless launch',()=>{
+  const dockerfile=readFileSync(join(root,'deploy/Dockerfile.agent-reverse'),'utf8');
+  const runtimeStage=dockerfile.split('AS runtime-rootfs')[1];
+  assert.match(runtimeStage,/apt-get[^;]+install[^;]+\bprocps\b/);
+  const preflight=readFileSync(join(root,'deploy/reverse-env.sh'),'utf8');
+  assert.match(preflight,/for command_name in [^;]+\bps\b/);
+  assert(preflight.includes('from "/opt/deepsonar/rea/node_modules/rea-agents/dist/process/ProcessOwnershipObservation.js"'));
+  assert(preflight.includes('await prepareProcessOwnershipInspection();'));
+});
+test('procps ownership columns expose the caller and missing or incompatible ps fails',{skip:process.platform==='linux'?false:'procps ownership preparation requires Linux; static image wiring still runs'},()=>{
+  const args=['-axo','pid=,ppid=,pgid=,uid=,stat=,command='];
+  const hasOwnPid=output=>output.split('\n').some(line=>{
+    const row=/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/.exec(line);
+    return row && Number(row[1])===process.pid;
+  });
+  const actual=spawnSync('ps',args,{encoding:'utf8'});
+  assert.ifError(actual.error); assert.equal(actual.status,0); assert(hasOwnPid(actual.stdout));
+  const temporary=mkdtempSync(join(tmpdir(),'reverse-procps-unit-'));
+  try {
+    const missing=spawnSync('ps',args,{encoding:'utf8',env:{...process.env,PATH:temporary}});
+    assert.equal(missing.error?.code,'ENOENT');
+    writeFileSync(join(temporary,'ps'),'#!/bin/sh\nprintf "incompatible ps columns\\n"\n',{mode:0o755});
+    const incompatible=spawnSync('ps',args,{encoding:'utf8',env:{...process.env,PATH:temporary}});
+    assert.ifError(incompatible.error); assert.equal(incompatible.status,0); assert.equal(hasOwnPid(incompatible.stdout),false);
+  } finally {rmSync(temporary,{recursive:true,force:true});}
+});
+test('failure summaries expose only whitelisted structured REA codes and causes',()=>{
+  const artifact={error:'Analysis failed',code:'execution_failure',details:{diagnostics:{runtime_root:'/tmp/private-session',failure_cause:{name:'GhidraLaunchError',message:'private provider message'}}}};
+  assert.equal(commandFailureSummary(JSON.stringify(artifact)),'REA execution_failure; GhidraLaunchError; inspect retained stdout/stderr artifacts');
+  assert.equal(commandFailureSummary(JSON.stringify({error:{code:'cancelled'},details:{diagnostics:{failure_cause:{name:'AnalysisCancelledError'}}}})),'REA cancelled; AnalysisCancelledError; inspect retained stdout/stderr artifacts');
+  assert.equal(commandFailureSummary(JSON.stringify({code:'capability_unavailable',details:{diagnostics:{failure_cause:{name:'AnalysisCapabilityUnavailableError'}}}})),'REA capability_unavailable; AnalysisCapabilityUnavailableError; inspect retained stdout/stderr artifacts');
+  for (const output of ['token=private-value','{invalid JSON',JSON.stringify({code:'token=private-value',details:{diagnostics:{failure_cause:{name:'private-name',message:'token=private-value'}}}})]) {
+    const summary=commandFailureSummary(output);
+    assert(!summary.includes('private')); assert(!summary.includes('token=')); assert(summary.includes('retained stdout/stderr artifacts'));
+  }
+  assert(!commandFailureSummary(JSON.stringify(artifact)).includes('/tmp/'));
 });
 test('public ELF and shared-library fixtures compile reproducibly with host gcc',{skip:process.platform!=='linux'?'native ELF compiler fixture check requires Linux':(!gccAvailable?'host gcc unavailable; mandatory Docker smoke never skips':false)},()=>{
   const temporary=mkdtempSync(join(tmpdir(),'reverse-fixture-unit-'));

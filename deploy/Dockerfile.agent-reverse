@@ -48,7 +48,7 @@ COPY agent-harness/rea-runtime/package.json agent-harness/rea-runtime/package-lo
 RUN set -eux; \
   apt-get -o Acquire::Retries=3 update; \
   apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
-    ca-certificates curl unzip xz-utils fontconfig libfreetype6; \
+    ca-certificates curl unzip xz-utils fontconfig libfreetype6 procps; \
   rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* \
     /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
   install -d -m 0755 \

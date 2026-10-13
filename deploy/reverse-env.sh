@@ -28,7 +28,7 @@ check_manifest() {
 
 check_tools() {
   local command_name
-  for command_name in java javac rea rea-agents analyzeHeadless jq node; do
+  for command_name in java javac rea rea-agents analyzeHeadless jq node ps; do
     command -v "$command_name" >/dev/null 2>&1 || {
       printf 'reverse 环境检查失败：缺少命令 %s\n' "$command_name" >&2
       return 1
@@ -59,6 +59,13 @@ check_tools() {
 
   node -e 'const p=require("/opt/deepsonar/rea/node_modules/rea-agents/package.json"); if (p.version !== "6.4.0") { console.error(p.version); process.exit(1); }' || {
     printf 'reverse 环境检查失败：rea-agents 版本不是 6.4.0\n' >&2
+    return 1
+  }
+
+  # REA prepares procps-backed ownership before spawning the headless JVM.
+  # Check its pinned implementation, including ps output parsing and our own PID.
+  node --input-type=module -e 'import { prepareProcessOwnershipInspection } from "/opt/deepsonar/rea/node_modules/rea-agents/dist/process/ProcessOwnershipObservation.js"; await prepareProcessOwnershipInspection();' || {
+    printf 'reverse 环境检查失败：REA 进程所有权检查需要兼容 procps 的 ps\n' >&2
     return 1
   }
 

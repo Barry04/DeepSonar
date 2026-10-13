@@ -5,6 +5,16 @@ import { readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const sanitizeProcess = ({pid,comm,state,ppid,pgid,start}) => ({pid,comm,state,ppid,pgid,start});
+/** Surface REA's stdout error without echoing arbitrary tool text or private session paths. */
+export function commandFailureSummary(output) {
+  let document;
+  try { document=JSON.parse(output); } catch { return 'unstructured command failure; inspect retained stdout/stderr artifacts'; }
+  const codes=new Set(['execution_failure','capability_unavailable','invalid_input','cancelled','timeout','not_found','configuration_error']);
+  const causes=new Set(['GhidraLaunchError','AnalysisCapabilityUnavailableError','AnalysisCancelledError']);
+  const code=document?.code ?? document?.error?.code;
+  const cause=document?.details?.diagnostics?.failure_cause?.name;
+  return [codes.has(code)?`REA ${code}`:'command failure',causes.has(cause)?cause:null,'inspect retained stdout/stderr artifacts'].filter(Boolean).join('; ');
+}
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 export function trackOwnedProcesses(known, rows, rootPid, supervisorPid) {
   const root=rows.find(row=>row.pid===rootPid && row.ppid===supervisorPid);
@@ -128,7 +138,7 @@ export async function measuredCommand({ name, command, args, directory, timeoutM
     });
   } finally { clearInterval(sampler); clearTimeout(timeout); clearInterval(cancellationDeadline); }
   const stdout=capture.buffer('out'), stderr=capture.buffer('err');
-  const output=stdout.toString('utf8'), errors=stderr.toString('utf8');
+  const output=stdout.toString('utf8');
   const elapsedMs=performance.now()-started;
   const residual=await noLeftovers(owned,remember);
   const record={ name, command, argv:args, elapsed_sec:elapsedMs/1000, exit_code:exit.code, signal:exit.signal, launch_error:launchError, timed_out:timedOut, output_truncated:overflow, stdout_bytes:capture.bytes('out'), stderr_bytes:capture.bytes('err'), stdout_retained_bytes:stdout.length, stderr_retained_bytes:stderr.length, cgroup_memory:cgroupMemory(), owned_processes:[...owned.values()].map(sanitizeProcess), residual_processes:residual.map(sanitizeProcess), forced_cleanup:forcedCleanup };
@@ -148,6 +158,6 @@ export async function measuredCommand({ name, command, args, directory, timeoutM
     assert.notEqual(exit.code,0,'cancelled query returned success');
     const document=JSON.parse(output);
     assert.equal(document.code ?? document.error?.code, 'cancelled', 'cancelled query must return structured cancelled code');
-  } else assert.equal(exit.code,0,`${name}: failed (${errors.slice(-800)})`);
+  } else assert.equal(exit.code,0,`${name}: ${commandFailureSummary(output)}`);
   return { record, output };
 }
