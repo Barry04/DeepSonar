@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import {
   CLI_UNAVAILABLE_CODE,
   CliCapabilityResult,
+  ControlEventEnvelope,
   EmitFactDirectPayload,
   EmitFactPayload,
   EmitFindingPayload,
@@ -294,5 +295,19 @@ test("archive-backed REA Fact guard binds provenance, hashes and unknown-only cl
   await assert.rejects(invoke(archive, proposal, { bytes: 10_000_001 }), /archive limit/);
   await assert.rejects(invoke(archive, proposal, {}, true), /published by this Job/);
   await assert.rejects(invoke(archive, { ...proposal, artifact: { extensions: { "binary.rea-cli": { evidence_key: "../x" } } } }), /canonical/);
-  await assert.rejects(invoke(archive, { ...proposal, artifact: { ...proposal.artifact, claims: [{ statement: "Not verified", status: "supports", evidence_refs: [] }] } }), /unknown/);
+  for (const status of ["supported", "contradicted"]) {
+    const proposed = EmitFactDirectPayload.parse({ ...proposal, artifact: { ...proposal.artifact,
+      claims: [{ statement: "Not verified", status, evidence_refs: [] }] } });
+    await assert.rejects(invoke(archive, proposed), /REA claims and evidence must stay unknown/);
+  }
+  for (const polarity of ["supports", "contradicts"]) {
+    const proposed = EmitFactDirectPayload.parse({ ...proposal, artifact: { ...proposal.artifact,
+      evidence: [{ statement: "Cannot self-verify this observation", polarity }] } });
+    await assert.rejects(invoke(archive, proposed), /REA claims and evidence must stay unknown/);
+  }
+  const invalid = { ...proposal, artifact: { ...proposal.artifact,
+    evidence: [{ statement: "Invalid enum remains a Control schema error", polarity: "refutes" }] } };
+  const unnormalized = await normalizeArchivedReaFact(jobId, invalid);
+  assert.equal(unnormalized, invalid);
+  assert.throws(() => ControlEventEnvelope.parse({ v: 1, event_id: jobId, type: "fact", payload: unnormalized }));
 });

@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import postgres from "postgres";
+import { ControlEventEnvelope, EmitFactDirectPayload } from "@deepsonar/shared-types";
 
 test("REA archive guard rejects forged scope/provenance, stale attempts and corrupted CAS", async () => {
   const url = process.env.TEST_DATABASE_URL?.trim();
@@ -80,11 +81,18 @@ test("REA archive guard rejects forged scope/provenance, stale attempts and corr
     await sql`UPDATE shared_asset_versions SET bytes=10000001 WHERE id=${String(valid.version_id)}`;
     await assert.rejects(normalizeArchivedReaFact(jobId, payload("guard/valid.json")), /archive limit/);
     await sql`UPDATE shared_asset_versions SET bytes=${original.byteLength} WHERE id=${String(valid.version_id)}`;
-    for (const polarity of ["supports", "refutes"]) {
+    for (const polarity of ["supports", "contradicts"]) {
       const proposed = payload("guard/valid.json");
-      await assert.rejects(normalizeArchivedReaFact(jobId, { ...proposed, artifact: { ...proposed.artifact,
-        evidence: [{ kind: "claim", statement: "Cannot self-verify this fixture", polarity }] } }), /unknown/);
+      const proposal = EmitFactDirectPayload.parse({ ...proposed, artifact: { ...proposed.artifact,
+        evidence: [{ kind: "claim", statement: "Cannot self-verify this fixture", polarity }] } });
+      await assert.rejects(normalizeArchivedReaFact(jobId, proposal), /unknown/);
     }
+    // Invalid enum values are rejected by the existing strict Control schema,
+    // whereas schema-valid non-unknown observations reach the archive guard.
+    const invalid = { ...payload("guard/valid.json"), artifact: { ...payload("guard/valid.json").artifact,
+      evidence: [{ statement: "Invalid polarity must not bypass the Control boundary", polarity: "refutes" }] } };
+    const unnormalized = await normalizeArchivedReaFact(jobId, invalid);
+    assert.throws(() => ControlEventEnvelope.parse({ v: 1, event_id: randomUUID(), type: "fact", payload: unnormalized }));
     await assert.rejects(normalizeArchivedReaFact(jobId, { ...payload("guard/valid.json"), verification: {
       finding_id: randomUUID(), evidence_kind: "review", outcome: "supports", subject_revision: "fixture", expected: "expected", actual: "actual",
     } }), /cannot submit a verification/);
