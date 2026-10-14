@@ -183,6 +183,13 @@ another route. The upstream SDK can dynamically install its native DeepSeek adap
 for an arbitrary `deepseek-official` initialization, so exposing this stdin as an
 untrusted general-purpose RPC endpoint is unsupported.
 
+### 上游客户端识别（#321 / #736）
+
+部分 new-api 架构的第三方中转按协议分别识别客户端，两个开关互不替代：
+
+- **OpenAI-responses（#321）**：按 body `input[0]` 的首条 system 消息识别；DSH 由 `dsh-request-frame.ts` 投影为 pi 兼容帧。
+- **Anthropic Messages（#736）**：只按 `User-Agent` 是否以 `claude-cli` 开头识别，否则 401 `unauthorized client detected`。真实 Job 由 Claude CLI 自带该 UA 并经网关透传；Scheduler 自发的推理探测 / 模型目录发现与网关 `upstreamAuthHeaders` 统一注入 `user-agent: claude-cli/<pin> (external, cli)` + `x-app: cli`，版本取 claude-code adapter pin（`apps/scheduler/src/claude-cli-fingerprint.ts`），不得另写第二个版本号。
+
 ## Pi Coding Agent RPC（#140）
 
 Pi 的启动命令由适配器固定为 `pi --mode rpc --no-approve --no-extensions`，使用

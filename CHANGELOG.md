@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### 修复
+
+- **Anthropic Messages 探测携带 Claude CLI 客户端指纹（#736）**：部分 new-api 架构第三方中转在 Anthropic Messages 路径只按 `User-Agent` 是否以 `claude-cli` 开头识别客户端，否则返回 401 `unauthorized client detected`；真实沙箱 Job 因 Claude CLI 自带 UA 不受影响，但账号管理页「测试连接」的推理探测与模型目录发现会被误报为 `authentication`。`credential-test.ts` 与网关 `upstreamAuthHeaders` 的 anthropic 认证头现统一注入 `user-agent: claude-cli/2.1.296 (external, cli)` + `x-app: cli`，版本取受治理的 claude-code adapter pin（新增 `claude-cli-fingerprint.ts`），不会与运行时 CLI 静默漂移；网关仍优先透传真实 CLI 请求头。推理探测 401 正文含 `unauthorized client` 时，结果明细标注「按客户端指纹拒绝，不一定是凭据无效」；READINESS 对 Anthropic 凭据的认证失败提示重新测试。与 #321（OpenAI-responses 按 `input[0]` 识别）相互独立，已在 `docs/AGENT_CLI_RUNTIME_ADAPTERS.md` 记录。
+
 ### 文档
 
 - #718：确认 v0.5.5 已发布 `deepsonar-reverse`（canonical `sha256:45b538274f513933135bd895d7350d51c7c0a557e5784a77e74b4be9b82820b8`，GHCR / Docker Hub / ACR 三通道 inspect + registry 回写；Release 附件含双架构 native 与 `published-manifest` Job evidence）。同步 REA / 发布 / 矩阵 / 架构文档状态；增加 hermetic 准入单测，绑定 bundled `0.5.5` digest → `selectRuntimeImageRef` 与 `static-registry` trusted 契约。关闭 #718。全局默认镜像不变，reverse 仍为 `project_opt_in`。

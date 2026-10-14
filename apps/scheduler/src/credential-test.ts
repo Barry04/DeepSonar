@@ -7,6 +7,7 @@ import {
   isProviderKnown,
   type CredentialHealthErrorCategory,
 } from "./credentials.js";
+import { claudeCliFingerprintHeaders } from "./claude-cli-fingerprint.js";
 import { decryptSecret, PROVIDER_ENV_MAP } from "./credentials.js";
 import {
   extractBaseUrlFromSettings,
@@ -139,9 +140,21 @@ function resolveProbeBaseUrl(cred: CredentialRequestInput): string {
   return baseUrl;
 }
 
-function authHeadersForProtocol(protocol: InferenceWireProtocol, secret: string): Record<string, string> {
+/**
+ * 推理探测与模型目录发现共用的认证头。Anthropic Messages 额外携带与 Claude Code
+ * 运行时同口径的客户端指纹（`user-agent: claude-cli/<pin> (external, cli)` + `x-app: cli`），
+ * 让 new-api 类中转的客户端校验结论与真实沙箱 Job 一致（#736）。
+ * 与 #321（OpenAI-responses 按 body `input[0]` 识别客户端）相关但独立。
+ * 与 gateway.ts upstreamAuthHeaders 保持同一口径。
+ */
+export function authHeadersForProtocol(protocol: InferenceWireProtocol, secret: string): Record<string, string> {
   return protocol === "anthropic-messages"
-    ? { Authorization: `Bearer ${secret}`, "x-api-key": secret, "anthropic-version": "2023-06-01" }
+    ? {
+      Authorization: `Bearer ${secret}`,
+      "x-api-key": secret,
+      "anthropic-version": "2023-06-01",
+      ...claudeCliFingerprintHeaders(),
+    }
     : { Authorization: `Bearer ${secret}` };
 }
 
@@ -240,7 +253,7 @@ function inferenceStatusAccepted(status: number): boolean {
 async function requestInferenceProbe(
   request: InferenceProbeRequest,
   timeoutMs: number,
-): Promise<{ status: number; url: string; protocol: InferenceWireProtocol }> {
+): Promise<{ status: number; url: string; protocol: InferenceWireProtocol; clientRejected: boolean }> {
   // 与目录探测同一口径：URL 已由 safeSourceUrl + Provider 允许列表校验（见 inferenceProbeRequest）。
   const url = request.url;
   let response: Response;
@@ -259,8 +272,46 @@ async function requestInferenceProbe(
       : detailForCategory(category);
     throw new CredentialProbeError(detail, category);
   }
+  const clientRejected = response.status === 401 && UNAUTHORIZED_CLIENT_PATTERN.test(await readBodyPrefix(response));
   await cancelResponseBody(response);
-  return { status: response.status, url: request.url, protocol: request.protocol };
+  return { status: response.status, url: request.url, protocol: request.protocol, clientRejected };
+}
+
+/** 上游防滥用层的客户端识别拒绝文案（new-api 类中转，#321 / #736）。 */
+const UNAUTHORIZED_CLIENT_PATTERN = /unauthorized client/iu;
+const ERROR_BODY_PREFIX_MAX_BYTES = 4096;
+
+/** 只读取错误正文的有界前缀用于分类，不回显到结果里；读取失败按空串处理。 */
+async function readBodyPrefix(response: Response): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) return "";
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (total < ERROR_BODY_PREFIX_MAX_BYTES) {
+      const { done, value } = await reader.read();
+      if (done || !value) break;
+      chunks.push(value);
+      total += value.byteLength;
+    }
+  } catch {
+    return "";
+  } finally {
+    try {
+      await reader.cancel();
+    } catch {
+      // 清理失败不影响分类。
+    }
+  }
+  const merged = new Uint8Array(Math.min(total, ERROR_BODY_PREFIX_MAX_BYTES));
+  let offset = 0;
+  for (const chunk of chunks) {
+    const slice = chunk.subarray(0, merged.byteLength - offset);
+    merged.set(slice, offset);
+    offset += slice.byteLength;
+    if (offset >= merged.byteLength) break;
+  }
+  return new TextDecoder().decode(merged);
 }
 
 /**
@@ -571,9 +622,12 @@ export async function testCredential(cred: CredentialProbe): Promise<CredentialP
       }
       if (probed.status !== 404 && probed.status !== 405) {
         const category = categoryForStatus(probed.status);
+        const clientHint = probed.clientRejected
+          ? "；上游返回 unauthorized client：按客户端指纹拒绝，不一定是凭据无效（见 #736 / #321）"
+          : "";
         return {
           ok: false,
-          detail: `Provider 推理探测失败（${probed.protocol}，${category}，HTTP ${probed.status}）`,
+          detail: `Provider 推理探测失败（${probed.protocol}，${category}，HTTP ${probed.status}${clientHint}）`,
           category,
           source_url: safeSourceUrl(probed.url),
           fetched_at: now(),
