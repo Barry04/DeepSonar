@@ -591,10 +591,13 @@ test("probe-limited credential test failure warns while an auth rejection fails"
   const rejected = evaluateReadiness(withTestResult({ ok: false, category: "authentication", probe_path: "inference" }));
   assert.equal(rejected.checks.find((check) => check.code === "CREDENTIAL_TEST_FAILED")?.severity, "error");
   assert.equal(rejected.ready, false);
+  // #736：Anthropic 凭据的认证失败提示 Claude CLI 指纹与重新测试，不放宽 fail 语义。
+  assert.match(rejected.checks.find((check) => check.code === "CREDENTIAL_TEST_FAILED")?.message ?? "", /claude-cli.*#736/u);
 
   // 旧审计行没有 category，保持原有 fail 语义。
   const legacy = evaluateReadiness(withTestResult({ ok: false }));
   assert.equal(legacy.checks.find((check) => check.code === "CREDENTIAL_TEST_FAILED")?.severity, "error");
+  assert.doesNotMatch(legacy.checks.find((check) => check.code === "CREDENTIAL_TEST_FAILED")?.message ?? "", /#736/u);
 });
 
 test("all actionable readiness checks carry stable repair metadata by scope", () => {

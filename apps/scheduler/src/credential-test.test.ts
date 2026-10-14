@@ -570,3 +570,108 @@ test("#624 distinguishes unsupported protocol, auth failure, and inference timeo
     globalThis.fetch = originalFetch;
   }
 });
+
+test("#736 anthropic-messages probe and catalog carry Claude CLI fingerprint headers", async () => {
+  const { encryptSecret } = await import("./credentials.js");
+  const { authHeadersForProtocol, listCredentialModels, testCredential } = await import("./credential-test.js");
+  const { AGENT_CLI_RUNTIME_ADAPTERS } = await import("@deepsonar/runtime-sandbox");
+  const expectedUa = `claude-cli/${AGENT_CLI_RUNTIME_ADAPTERS["claude-code"].version} (external, cli)`;
+
+  const anthropic = authHeadersForProtocol("anthropic-messages", "sk-test");
+  assert.match(anthropic["user-agent"] ?? "", /^claude-cli\//u);
+  assert.equal(anthropic["user-agent"], expectedUa);
+  assert.equal(anthropic["x-app"], "cli");
+  // 指纹只用于 Anthropic Messages；OpenAI 协议不冒充 Claude CLI（#321 走 body input[0]）。
+  for (const protocol of ["openai-completions", "openai-responses"] as const) {
+    const headers = authHeadersForProtocol(protocol, "sk-test");
+    assert.equal(headers["user-agent"], undefined);
+    assert.equal(headers["x-app"], undefined);
+  }
+
+  const encrypted = encryptSecret("super-secret");
+  const originalFetch = globalThis.fetch;
+  const seen: { url: string; headers: Headers }[] = [];
+  try {
+    globalThis.fetch = (async (input, init) => {
+      const headers = new Headers(init?.headers);
+      seen.push({ url: String(input), headers });
+      // 模拟 new-api 中转：UA 不以 claude-cli 开头时拒绝客户端。
+      if (!(headers.get("user-agent") ?? "").startsWith("claude-cli")) {
+        return new Response('{"error":{"message":"unauthorized client detected"}}', { status: 401 });
+      }
+      if (String(input).endsWith("/models")) {
+        return Response.json({ data: [{ id: "claude-probe" }] });
+      }
+      return new Response("{}", { status: 200 });
+    }) as typeof fetch;
+
+    const cred = {
+      provider: "anthropic",
+      kind: "llm_provider" as const,
+      ...encrypted,
+      public_metadata_json: { base_url: "https://relay.example.test" },
+      settings_config_json: {
+        providers: { deepsonar: { api: "anthropic-messages", models: { "claude-probe": {} } } },
+      },
+    };
+    const probed = await testCredential(cred);
+    assert.equal(probed.ok, true);
+    assert.equal(probed.probe_path, "inference");
+
+    const catalog = await listCredentialModels(cred);
+    assert.equal(catalog.available, true);
+    assert.deepEqual(catalog.models, ["claude-probe"]);
+
+    assert.ok(seen.length >= 2);
+    for (const request of seen) {
+      assert.equal(request.headers.get("user-agent"), expectedUa, request.url);
+      assert.equal(request.headers.get("x-app"), "cli", request.url);
+      assert.equal(request.headers.get("anthropic-version"), "2023-06-01", request.url);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("#736 inference 401 unauthorized client is labelled as client-fingerprint rejection", async () => {
+  const { encryptSecret } = await import("./credentials.js");
+  const { testCredential } = await import("./credential-test.js");
+  const encrypted = encryptSecret("super-secret");
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async () => new Response(
+      '{"error":{"message":"unauthorized client detected","type":"new_api_error"}}',
+      { status: 401 },
+    )) as typeof fetch;
+    const rejected = await testCredential({
+      provider: "anthropic",
+      kind: "llm_provider",
+      ...encrypted,
+      public_metadata_json: { base_url: "https://relay.example.test" },
+      settings_config_json: {
+        providers: { deepsonar: { api: "anthropic-messages", models: { "claude-probe": {} } } },
+      },
+    });
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.category, "authentication");
+    assert.match(rejected.detail, /unauthorized client/u);
+    assert.match(rejected.detail, /#736/u);
+    assert.doesNotMatch(rejected.detail, /new_api_error/u);
+
+    globalThis.fetch = (async () => new Response("invalid api key", { status: 401 })) as typeof fetch;
+    const invalid = await testCredential({
+      provider: "anthropic",
+      kind: "llm_provider",
+      ...encrypted,
+      public_metadata_json: { base_url: "https://relay.example.test" },
+      settings_config_json: {
+        providers: { deepsonar: { api: "anthropic-messages", models: { "claude-probe": {} } } },
+      },
+    });
+    assert.equal(invalid.ok, false);
+    assert.equal(invalid.category, "authentication");
+    assert.doesNotMatch(invalid.detail, /unauthorized client/u);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

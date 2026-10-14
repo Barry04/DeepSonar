@@ -707,13 +707,20 @@ export function evaluateReadiness(input: ReadinessEvaluationInput): ReadinessRes
         : latestTest.result === "ok" && testFresh ? "ok" : latestTest.result === "ok" ? "stale" : "error";
       // 只有推理路径被拒才能证明账号不可用；探测路径限制（category=unknown）
       // 降级为 warning，避免第三方中转造成的永久 not ready（#491）。
-      const testProbeLimited = credentialTestFailureCategory(latestTest) === "unknown";
+      const testFailureCategory = credentialTestFailureCategory(latestTest);
+      const testProbeLimited = testFailureCategory === "unknown";
+      // #736：new-api 类中转在 Anthropic Messages 路径只按 User-Agent 是否以 claude-cli
+      // 开头识别客户端（与 #321 的 OpenAI-responses input[0] 识别相互独立）。探测/目录现已
+      // 携带 Claude CLI 指纹；修复前留下的 authentication 失败需要重新测试才能反映真实结论。
+      const anthropicFingerprintHint = binding.provider === "anthropic" && testFailureCategory === "authentication"
+        ? "若上游为 new-api 类中转并报 unauthorized client：平台连接测试已按 Claude Code 运行时携带客户端指纹（user-agent: claude-cli/…、x-app: cli，#736），请重新测试；仍失败再核对凭据本身。"
+        : "";
       const testEvidence = evidenceSummary("credential_test", testStatus, latestTest, now);
       checks.push(testStatus === "error"
         ? input.executionMode === "real"
           ? testProbeLimited
             ? attention("CREDENTIAL_TEST_FAILED", `${role.name} 最近一次 Credential 连接测试未通过，但失败来自探测路径（如 Provider 不支持 /v1/models）；该结果不证明账号不能调用模型，请用真实推理调用核对。`, credentialFix(input.scope), { role: summary, credential: credentialRef, evidence: testEvidence })
-            : fail("CREDENTIAL_TEST_FAILED", `${role.name} 最近一次 Credential 连接测试失败；请重新测试后再运行。`, credentialFix(input.scope), { role: summary, credential: credentialRef, evidence: testEvidence })
+            : fail("CREDENTIAL_TEST_FAILED", `${role.name} 最近一次 Credential 连接测试失败；请重新测试后再运行。${anthropicFingerprintHint}`, credentialFix(input.scope), { role: summary, credential: credentialRef, evidence: testEvidence })
           : attention("CREDENTIAL_TEST_FAILED_FAKE", `${role.name} 最近一次 Credential 连接测试失败；fake 模式不消费 Provider 凭据，但切换 real 前请重新测试。`, credentialFix(input.scope), { role: summary, credential: credentialRef, evidence: testEvidence })
         : testStatus === "missing" || testStatus === "stale"
           ? attention("CREDENTIAL_TEST_EVIDENCE_STALE", `${role.name} 没有 24 小时内成功的连接测试证据；服务端不会凭空声称 Provider 在线。`, credentialFix(input.scope), { role: summary, credential: credentialRef, evidence: testEvidence })

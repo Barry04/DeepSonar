@@ -29,6 +29,7 @@ import {
   bareUpstreamModelId,
   modelCatalogMatchForRequest,
 } from "./provider-effective-model.js";
+import { claudeCliFingerprintHeaders } from "./claude-cli-fingerprint.js";
 import {
   assertGatewayRequestModelAllowed,
   gatewayRequestModelFromBody,
@@ -374,10 +375,13 @@ export function upstreamAuthHeaders(provider: string, secret: string): Record<st
   switch (provider) {
     case "anthropic":
       // 官方 Anthropic 认 x-api-key；第三方兼容代理（及本机 Claude Code）认 Bearer。
+      // #736：附带 Claude CLI 指纹（user-agent/x-app）。真实 Job 的 CLI 请求头会在
+      // 下方透传逻辑中覆盖这两项；缺少透传头时网关自发的 anthropic 请求仍保持同口径。
       return {
         authorization: `Bearer ${secret}`,
         "x-api-key": secret,
         "anthropic-version": "2023-06-01",
+        ...claudeCliFingerprintHeaders(),
       };
     case "openai":
       return { authorization: `Bearer ${secret}` };
