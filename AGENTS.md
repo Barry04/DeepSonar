@@ -207,6 +207,18 @@ Canvas 只读，节点坐标由服务端布局生成。Finding 详情按 Issue �
 
 为什么写死成硬门：`docs/PROJECT_REVIEW_2026-08.md` 早就建议加「文档表征测试」断言 schema 版本字面量一致，而该断言一直没落地，于是 v0.4.x 期间本文件与 `DESIGN.md` 的版本号真实漂移了两代，另有一批按已删机制写的段落（PR #696 修正）。**现已落地为 `pnpm ci:unit:docs-freshness`**（版本字面量、文档里的 `pnpm` 脚本存在性、相对链接、已删机制残留），已挂进 CI；但机检覆盖不到语义——「as-built 段落是否与代码相反」仍需人工按上面第 3 项逐条核。
 
+### 失败发布恢复：经授权删除并重建同名 Git tag
+
+仅适用于**尚未成功正式发布**的失败版本，且必须先取得用户对该版本删除并重建 Git tag 的明确授权。已正式发布的版本保持不可变，不得以恢复为名移动 tag。此流程不豁免上面的文档保鲜与 [`docs/RELEASE_RUNTIME_IMAGES.md`](docs/RELEASE_RUNTIME_IMAGES.md) 的发布硬门。
+
+1. **先核对并留证**：检查现有 GitHub Release、registry 各通道的版本标签 / digest、descriptor / catalog，以及运行中或排队的发布任务。保存旧 tag 的对象 SHA、解引用 commit SHA、失败 run 链接及已产出镜像证据，供审计和必要的恢复使用；不能只凭某个 job 失败就认定整个版本从未正式发布，也不能在并行发布未协调时删 tag。
+2. **修复先合主线，再确认恢复版本**：相关修复必须走正常 review / merge；删除和重建前重新 `git fetch origin main`，解析 `origin/main` 的最新 commit，并核对所需修复确已包含。目标 tag、`CHANGELOG.md` 对应版本 / compare link 和发布文档必须一致；若最新 main 已准备另一个版本、已有更高版本 tag，或新版本发布正在进行，先停下协调恢复版本，不能机械地把旧版本 tag 指向版本不匹配的提交，也不能降级 changelog 门禁。
+3. **在最终 SHA 上验收**：完成文档保鲜、实际 changelog 校验、该 SHA 的核心 CI 和适用的原生 `linux/amd64` / `linux/arm64` 与真实 Job 验收。纯文档合并若未触发 `push@main` CI，按发布文档手动触发并核对 SHA。发布复制的单次 timeout、重试次数、退避、各通道串行耗时和 workflow job 的总预算须一起核对；增加重试不能代替足够的总预算，未有日志证据不能把 HTTP/2 等猜测写成已证实根因。
+4. **重建必须指向最新已核验 main**：前置条件满足后才删除远端及本地旧 tag，并确认远端已删除；重建前再次 fetch / 核对 main。若 main 已推进，回到前两步完成版本与新 SHA 验收，不能沿用旧发布 SHA 或先前记下的固定 SHA。可创建 annotated tag，但必须显式以此时最新、已验收的 main commit 为目标；推送后核对远端 tag 解引用 SHA。回退旧 tag 也会产生外部效果，不得静默执行。
+5. **启动新运行并核对源码**：推送 `v*` tag 会触发 `.github/workflows/release.yml`；检查新 run 的 `head_sha`、实际 checkout SHA 和 tag 解引用 SHA 均等于目标提交。直接 rerun 旧 run 仍使用原运行的 ref / SHA，不能据此宣称已应用 main 上的新脚本。
+6. **Git tag 与镜像分开处理**：删除 Git tag 不会删除 GHCR / ACR / Docker Hub 镜像，不能默认清空 registry。Reverse 已有 index / payload 必须与本轮原生验收的两个 runnable manifest 完全匹配；匹配时保留原 index bytes / digest，仅补缺失通道。payload 不匹配或既有目的地 index digest 冲突时必须 fail closed，协调新的版本，不能强制覆盖已有不可变镜像来掩盖差异。
+7. **以完整发布闭环收口**：新 Release workflow 必须实际成功，取得真实 `reverse.json`、所有配置通道的 descriptor / inspect 证据，通过最终 catalog 的双平台 payload 门禁，完成 catalog 与部署 tag 回写以及正式 GitHub Release / 附件。tag 存在、CI 通过或部分镜像推送成功都不等于发布完成；未完成项必须如实保留为阻塞。
+
 ## 工程原则
 
 1. 删除优先，避免无需求的抽象、状态、配置、依赖和兼容层。
