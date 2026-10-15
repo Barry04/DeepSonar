@@ -1,12 +1,27 @@
 ## [Unreleased]
 
+## [0.5.6] - 2026-10-15
+
+### 发布状态
+
+- **发布说明**：本节在打 `v0.5.6` tag 前写定，本身不证明 GitHub Release 或镜像已发布完成。上一版 `v0.5.5` 的 tag 触发 Release（run `38506851988`）已全部成功，并把 `deepsonar-reverse` `0.5.5` 与 canonical digest 回写 bundled registry。本版剩余硬门不变：本 tag 触发的 Release 实际成功，产出真实不可变 digest、各配置通道 inspect 证据，并通过最终 catalog 双平台 payload 门禁后由 workflow 回写 `deploy/runtime-image-registry.json` 与部署 tag。以上任一未完成即不得宣称发布完成，也不得伪造 digest / inspect 证据、用空 descriptor 或从必需产品集合静默删除产品来绕过阻塞。
+
 ### 修复
 
 - **Anthropic Messages 探测携带 Claude CLI 客户端指纹（#736）**：部分 new-api 架构第三方中转在 Anthropic Messages 路径只按 `User-Agent` 是否以 `claude-cli` 开头识别客户端，否则返回 401 `unauthorized client detected`；真实沙箱 Job 因 Claude CLI 自带 UA 不受影响，但账号管理页「测试连接」的推理探测与模型目录发现会被误报为 `authentication`。`credential-test.ts` 与网关 `upstreamAuthHeaders` 的 anthropic 认证头现统一注入 `user-agent: claude-cli/2.1.296 (external, cli)` + `x-app: cli`，版本取受治理的 claude-code adapter pin（新增 `claude-cli-fingerprint.ts`），不会与运行时 CLI 静默漂移；网关仍优先透传真实 CLI 请求头。推理探测 401 正文含 `unauthorized client` 时，结果明细标注「按客户端指纹拒绝，不一定是凭据无效」；READINESS 对 Anthropic 凭据的认证失败提示重新测试。与 #321（OpenAI-responses 按 `input[0]` 识别）相互独立，已在 `docs/AGENT_CLI_RUNTIME_ADAPTERS.md` 记录。
+- **部署就绪门禁与运行镜像恢复统计（#730）**：部署侧修复普通启动与 worker-join 的 `if ! command` 退出码丢失（保留失败与超时语义，不把失败误报为成功）；入口就绪判定改为顶层布尔 `ok=true` 且 `ready=true`，HTTP 200 或容器 `Running` 都不能替代真实就绪；postgres / silo 探针、状态查询与诊断子命令改用真实截止时间与独立超时，覆盖无 `setsid` 时的子孙进程回收；受控续启必须等 `silo-init` 成功退出才启动后续应用；PowerShell 侧对齐依赖与容器检查、参数引用和日志脱敏。运行镜像侧：`prepare` 返回真实 `attempts` / `retry_count` / `timeout_budget_sec`，本地命中为零次 pull、共享 in-flight 观察同一操作、post-pull digest 校验失败仍保留已消耗预算；对账默认从真实 Worker registry 枚举远端节点（含离线 / 过期），registry 失败不静默执行 repair；远端 inspect / repair 尚未实现时明确返回 `unsupported`，不用 Scheduler 宿主状态冒充远端。同步 OpenAPI、runbook 与设计索引。
 
 ### 文档
 
 - #718：确认 v0.5.5 已发布 `deepsonar-reverse`（canonical `sha256:45b538274f513933135bd895d7350d51c7c0a557e5784a77e74b4be9b82820b8`，GHCR / Docker Hub / ACR 三通道 inspect + registry 回写；Release 附件含双架构 native 与 `published-manifest` Job evidence）。同步 REA / 发布 / 矩阵 / 架构文档状态；增加 hermetic 准入单测，绑定 bundled `0.5.5` digest → `selectRuntimeImageRef` 与 `static-registry` trusted 契约。关闭 #718。全局默认镜像不变，reverse 仍为 `project_opt_in`。
+- **失败发布同名 tag 恢复守则（#734）**：`AGENTS.md` 发版硬门后新增失败发布恢复流程——仅适用于**尚未成功正式发布**且取得用户明确授权的失败版本，且必须先保留旧 tag 对象 SHA、解引用 commit SHA、失败 run 链接与已产出镜像证据。修复必须先走 review / merge；删除及重建 tag 前重新 `git fetch origin main`，新 tag 必须指向最新且已验收的 main commit，已有更高版本 tag、版本文档不匹配或并行发布进行中时先协调，不得降级 changelog 门禁。删除 Git tag 不会清理 GHCR / ACR / Docker Hub 镜像；Reverse 既有 immutable index / payload 与本轮原生验收的 runnable manifest 匹配时保留原 index bytes 仅补缺失通道，不匹配则 fail closed，不得强制覆盖不可变镜像掩盖差异。新 tag 触发新 release run 并核对 `head_sha` / checkout SHA / tag 解引用 SHA；旧 run 的 rerun 不代表采用最新脚本。收口必须完成双架构与真实 Job 验收、descriptor / catalog / 部署 tag 回写和正式 Release，部分成功不等于发布完成。
+
+### 部署 / 升级说明
+
+- 本版不修改数据库 schema，主线保持 v56，无需数据库重建；`database/schema.sql` 未变。
+- 本版不改变运行镜像输入或 fingerprint，命中不可变 `src-*` 缓存时复用既有构建，仍执行规定的原生冒烟；控制面镜像因 Scheduler 源码变更（#736 / #730）随本次发布重建。
+- `deploy/deploy.sh` 与 `deploy/deploy.ps1` 的改动只影响就绪判定、有界等待与诊断输出，不改变服务拓扑、凭据面或操作权限；远端节点镜像 inspect / repair 仍为明确后续范围，未扩大节点网络或凭据权限。
+- 准备期间不手写 bundled 清单中的运行镜像 digest，也不提前改写仍指向上一份已验证发行物的 bundled 清单；`deploy/runtime-image-registry.json` 与 `deploy/.env.example` 的 `DEEPSONAR_IMAGE_TAG` 仅由本 tag 的 Release 实际发布证据通过后由 workflow 回写。
 
 ## [0.5.5] - 2026-10-14
 
@@ -1144,6 +1159,7 @@
 
 - The bundled runtime registry was synchronized for the `v0.1.18` release.
 
+[0.5.6]: https://github.com/SummerSec/DeepSonar/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/SummerSec/DeepSonar/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/SummerSec/DeepSonar/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/SummerSec/DeepSonar/compare/v0.5.2...v0.5.3
