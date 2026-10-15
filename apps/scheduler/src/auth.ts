@@ -222,6 +222,10 @@ const ROUTE_SCOPES: Record<string, string> = {
   "PATCH /runtime-images/:id([0-9a-fA-F-]{36})/visibility": "images:manage",
   "GET /global-settings": "agents:read",
   "PATCH /global-settings": "agents:write",
+  // #740 平台级全局暂停领取：状态供 Web 全局横幅读取；暂停 / 恢复仅平台管理员。
+  "GET /platform/claims": "tasks:read",
+  "POST /platform/claims/pause": "admin",
+  "POST /platform/claims/resume": "admin",
   "GET /readiness": "agents:read",
   "GET /projects/:id/readiness": "agents:read",
   "GET /tokens": "tokens:manage",

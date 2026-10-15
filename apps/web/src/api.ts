@@ -1,5 +1,6 @@
 /** 调度器 API 类型与请求（vite proxy /api → :3100） */
 
+import type { PlatformClaimsStatus } from "./platform-claims";
 import type {
   CanvasLifecycleRollup,
   CurrentAgentCli,
@@ -2638,6 +2639,7 @@ export const api = {
   cancelImport: (id: string) => send<DataImportRow>("POST", `/imports/${id}/cancel`),
   deleteImport: (id: string) => send<{ ok: boolean }>("DELETE", `/imports/${id}`),
   globalSettings: () => get<GlobalSettings>("/global-settings"),
+  platformClaims: () => get<PlatformClaimsStatus>("/platform/claims"),
   patchGlobalSettings: (body: { rules?: Record<string, unknown>; finding_protocol?: FindingProtocolConfig | null }) =>
     send<GlobalSettings>("PATCH", "/global-settings", body),
   projectSkillSources: (projectId: string) =>

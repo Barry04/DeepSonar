@@ -289,6 +289,21 @@ git pull
 
 schema 大版本变化时须按基线重建库（无升级路径）。升级前先备份。
 
+升级前可先用平台级全局暂停领取（#740）排空在途 Job，避免长时 Agent Job 在重启时被判 orphan：
+
+```bash
+# 需平台管理员 token；新任务仍可入队但不会被领取
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"reason":"platform_upgrade"}' http://127.0.0.1:8080/api/platform/claims/pause
+# 轮询直到 state=paused（drained=true：在途与未结算外部效果都已归零）
+curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/api/platform/claims
+# 升级、健康检查通过后解除
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"reason":"platform_upgrade"}' http://127.0.0.1:8080/api/platform/claims/resume
+```
+
+暂停持久化在 PostgreSQL，Scheduler 重启后保持；`db:rebuild` 按列交集回填 `global_settings`，从 v57 起暂停状态也会被保留。不会自动取消或杀 Job；排空超时由管理员决定继续等待或手动取消。受控 `upgrade check / apply / rollback` 子命令与按 digest 的部署契约属于 #740 后续 PR，尚未落地。
+
 官方 runtime image 升版（例如 `0.1.38` → `0.1.39`）并完成 registry sync 后，市场会列出新的 trusted digest。#691 起项目不再钉版本，新建 Job 始终按平台 channel 最新 trusted 解析并冻结 digest；已冻结 Job 快照不改写。
 
 ## 8. 常见问题

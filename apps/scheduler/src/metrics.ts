@@ -54,6 +54,14 @@ const GAUGES: Record<string, Gauge> = {
         SELECT COUNT(*)::int AS n FROM jobs
         WHERE status = 'running' AND sandbox_id IS NOT NULL`)[0].n,
   },
+  deepsonar_platform_claims_paused: {
+    help: "1 when an admin paused platform-wide Job claims (#740), else 0; missing state fails closed as 1",
+    query: async () => {
+      const [row] = await sql<{ paused: boolean | null }[]>`
+        SELECT claims_paused AS paused FROM global_settings WHERE id = 'global'`;
+      return row?.paused === false ? 0 : 1;
+    },
+  },
   deepsonar_audit_logs_total: {
     help: "Audit log rows (append-only)",
     query: async () =>

@@ -72,6 +72,44 @@ const TaskExecutionControlResponseSchema = {
   },
 };
 
+const PlatformClaimsStatusSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "claims_paused", "reason", "note", "paused_by", "paused_at", "state", "drained",
+    "in_flight", "pending", "waiting_human", "effect_pending_attempts", "unknown_effect_attempts",
+  ],
+  properties: {
+    changed: { type: "boolean", description: "仅 pause / resume 返回：本次请求是否改变了持久化状态" },
+    claims_paused: { type: "boolean" },
+    reason: { type: "string", nullable: true, enum: ["platform_upgrade", "maintenance", null] },
+    note: { type: "string", nullable: true, maxLength: 500 },
+    paused_by: { type: "string", nullable: true, description: "操作者标签（主体类型:名称），不含凭据" },
+    paused_at: { type: "string", format: "date-time", nullable: true },
+    state: {
+      type: "string",
+      enum: ["running", "pausing", "paused"],
+      description: "running=未暂停；pausing=已暂停但仍有在途 Job 或未结算外部效果；paused=已暂停且排空",
+    },
+    drained: { type: "boolean", description: "in_flight.total、effect_pending_attempts、unknown_effect_attempts 均为 0" },
+    in_flight: {
+      type: "object",
+      additionalProperties: false,
+      required: ["claimed", "provisioning", "running", "total"],
+      properties: {
+        claimed: { type: "integer", minimum: 0 },
+        provisioning: { type: "integer", minimum: 0 },
+        running: { type: "integer", minimum: 0 },
+        total: { type: "integer", minimum: 0 },
+      },
+    },
+    pending: { type: "integer", minimum: 0, description: "已入队、暂停期间不会被领取的 Job 数" },
+    waiting_human: { type: "integer", minimum: 0, description: "等待人工的 Job 数；不计入排空判定" },
+    effect_pending_attempts: { type: "integer", minimum: 0 },
+    unknown_effect_attempts: { type: "integer", minimum: 0 },
+  },
+};
+
 const FactVerificationSchema = {
   type: "object",
   nullable: true,
@@ -1662,6 +1700,55 @@ const OPS: Op[] = [
           description: "全局规则。maxGlobalJobs / maxJobsPerProject / maxConcurrentProvisioning 为 1–1000；stallSec / jobTokenMaxRequests 为 0–上限（0=不限制）；auditTimeoutSec / verifyTimeoutSec / provisionTimeoutSec 为配置中心第一批；maxConcurrentJobs 只能写在项目设置。",
         },
       },
+    },
+  },
+  {
+    method: "get",
+    path: "/platform/claims",
+    summary: "平台级全局暂停领取状态与在途数量",
+    description: "#740：持久化在 PostgreSQL，所有 Scheduler 副本在 claim advisory lock 内读取；重启后保持。项目级 token 拒绝（403 PLATFORM_CLAIMS_PROJECT_TOKEN_FORBIDDEN）。",
+    scope: "tasks:read",
+    tags: ["Settings"],
+    responses: { "200": PlatformClaimsStatusSchema },
+  },
+  {
+    method: "post",
+    path: "/platform/claims/pause",
+    summary: "开启平台级全局暂停领取（新 Job 仍可入队但不领取）",
+    description: "只阻止新的 pending → claimed，不取消、不杀、不重放在途 Job。同一原因重复调用幂等（changed=false）；已因其他原因暂停返回 409 PLATFORM_CLAIMS_ALREADY_PAUSED。写审计 platform.claims_pause。",
+    scope: "admin",
+    tags: ["Settings"],
+    body: {
+      type: "object",
+      additionalProperties: false,
+      required: ["reason"],
+      properties: {
+        reason: { type: "string", enum: ["platform_upgrade", "maintenance"] },
+        note: { type: "string", minLength: 1, maxLength: 500 },
+      },
+    },
+    responses: {
+      "200": PlatformClaimsStatusSchema,
+      "409": { description: "已因其他原因暂停", content: { "application/json": { schema: ErrorSchema } } },
+    },
+  },
+  {
+    method: "post",
+    path: "/platform/claims/resume",
+    summary: "解除平台级全局暂停领取并唤醒调度",
+    description: "未暂停时幂等（changed=false）。可选 reason：仅当当前暂停原因一致时解除，否则 409 PLATFORM_CLAIMS_PAUSE_REASON_MISMATCH。写审计 platform.claims_resume。",
+    scope: "admin",
+    tags: ["Settings"],
+    body: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        reason: { type: "string", enum: ["platform_upgrade", "maintenance"] },
+      },
+    },
+    responses: {
+      "200": PlatformClaimsStatusSchema,
+      "409": { description: "暂停原因不一致，未解除", content: { "application/json": { schema: ErrorSchema } } },
     },
   },
   { method: "get", path: "/projects/{id}/settings", summary: "项目规则、角色启用与镜像策略", scope: "agents:read", tags: ["Settings"] },
