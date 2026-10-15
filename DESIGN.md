@@ -2,7 +2,7 @@
 
 > 当前 as-built 设计与演进边界。本文给 Agent、贡献者和运维人员先读。
 >
-> 权威顺序：代码、`database/schema.sql`、OpenAPI、测试 > 本文；专题文档状态见 [`docs/README.md`](docs/README.md)。长期 AI-native 方案见 [`docs/AI_NATIVE_TRUSTED_KERNEL.md`](docs/AI_NATIVE_TRUSTED_KERNEL.md)。
+> 本文为执行摘要，展开正文按 [架构归属表](docs/architecture/README.md) 定位。实现事实以代码、`database/schema.sql`、OpenAPI、测试为准；规范违约记录为缺陷，不能改需求迎合 bug。专题文档状态见 [`docs/README.md`](docs/README.md)。长期 AI-native 方案见 [`docs/AI_NATIVE_TRUSTED_KERNEL.md`](docs/AI_NATIVE_TRUSTED_KERNEL.md)。
 
 ## 1. 设计判断
 
@@ -272,6 +272,7 @@ Session 查看器按 CLI 方言解析 reasoning、message、tool call/result、u
 
 | 方向 | 当前状态 | 下一步 |
 | --- | --- | --- |
+| 架构治理（#741） | 编号规格、十二视图、追溯矩阵、六条 ADR 与开发文档同步 Skill 已建立；门禁覆盖结构和引用 | 每次行为变更核对需求/实现/验证，语义人工复核 |
 | Artifact-first（#444） | Phase 1 已落地，Artifact 为内部写入真相，Finding 为投影 | 扩展 Claim/Evidence/Evaluation/Projection，清理双重事实源 |
 | RepairFeedback（#446/#453/#449） | Phase 1 已落地，Control API 严格拒绝路径已接线；Web 对现有 Job error / effect ledger 另做只读四类投影 | Proposal/Receipt/Settlement、统一 Completion Gate |
 | Capability Pack（#447/#459） | Manifest、Job 级发现和快照 selector/digest 已落地；目录发现仍需严格受冻结 selector/digest 上限约束 | live catalog 漂移门禁、task/session 生命周期、准入评估、临时组合、经验推荐 |
@@ -290,7 +291,7 @@ Session 查看器按 CLI 方言解析 reasoning、message、tool call/result、u
 
 ## 13. 实现硬约束
 
-1. **先读本文和专题文档，再读代码**；冲突以代码、schema、OpenAPI、测试为准，并回写本文。
+1. **先读本文、[架构规格与追溯](docs/architecture/README.md)和相关专题，再读代码**；描述漂移回写文档，实现违反规范则记录缺陷。功能设计与变更必须执行[文档同步 Skill](.agents/skills/architecture-doc-sync/SKILL.md)。
 2. **状态机、幂等键、外键和权限骨架进定列；内容进 JSONB**。改表只能修改 `database/schema.sql`、bump `SCHEMA_VERSION`、重建并验证，不写增量 ALTER 链。
 3. **共享 Zod 契约是前后端和事件 payload 的单源**。新增 operation 必须有合法/非法夹具、宿主重验、事务回滚和冒烟测试。
 4. **新增 CLI 必须同步 runtime adapter、Session archive adapter、Web Session viewer、测试和原始归档下载**。
@@ -298,7 +299,7 @@ Session 查看器按 CLI 方言解析 reasoning、message、tool call/result、u
 6. **任何可修正失败都必须给 RepairFeedback**；任何 `accepted` 都必须有 durable receipt 语义；未知外部效果禁止自动猜测重放。
 7. **模型不可提交坐标、镜像 digest、凭据、终态或未授权项目引用**。模型看到的 prompt、Artifact、Finding 和外部输入都按不可信内容处理。
 8. **测试必须覆盖行为边界**：只跑 typecheck 不算完成。按影响范围选择 `ci:unit:*`、`ci:integration:*`、`ci:smoke:*`、镜像检查和前端契约测试。
-9. **发版前必须做文档保鲜（硬门）**：改 `CHANGELOG.md` / 打 `v*` tag / 建 release 之前，按 [`AGENTS.md`](AGENTS.md) 的「发布前的文档保鲜」清单核一遍——版本字面量、本版已删机制的全仓残留、与代码相反的 as-built 段落、状态索引、命令与链接；未通过不得发版，漂移修在同一个 release 分支。展开见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §17.5。
+9. **发版前必须做文档保鲜（硬门）**：改 `CHANGELOG.md` / 打 `v*` tag / 建 release 之前，按 [`AGENTS.md`](AGENTS.md) 的「发布前的文档保鲜」清单核一遍——版本字面量、本版已删机制的全仓残留、与代码相反的 as-built 段落、状态索引、命令与链接；未通过不得发版，漂移修在同一个 release 分支。展开见[工程规范](docs/architecture/11-engineering-specs.md)与[发布流程](docs/RELEASE_RUNTIME_IMAGES.md)。
 
 ## 14. 仓库地图与事实入口
 
@@ -314,7 +315,7 @@ Session 查看器按 CLI 方言解析 reasoning、message、tool call/result、u
 
 实现入口：
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)：完整架构、威胁模型、存储和状态机细节；
+- [`docs/architecture/README.md`](docs/architecture/README.md)：系统规格、上下文/信任边界、运行时/数据/部署视图、追溯矩阵与 ADR；旧 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) 按章节保留历史对照；
 - [`docs/README.md`](docs/README.md)：专题文档和 as-built 状态索引；
 - [`docs/AI_NATIVE_TRUSTED_KERNEL.md`](docs/AI_NATIVE_TRUSTED_KERNEL.md)：长期内核/插件协议、Crash Matrix 和实施路线；
 - [`database/schema.sql`](database/schema.sql)：唯一数据库基线；

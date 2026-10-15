@@ -39,7 +39,7 @@ pnpm ci:images
 
 **v0.5.5 发布结果**（v0.5.4 tag 不移动；其 Release 中 `reverse-images` 曾把 GHCR index 推送成功但 ACR / Docker Hub `imagetools create` 失败；#732 为 `publish-reverse-runtime.mjs` 补上 HTTP/1.1、每次 15 分钟、最多 3 次重试）：v0.5.5 tag 触发的 Release 已全部成功——真实不可变 digest、`reverse.json`、三通道 inspect、证据附件 `deepsonar-reverse-evidence-0.5.5.tar.gz`，并由 workflow 把 `deepsonar-reverse` `0.5.5` 回写 `deploy/runtime-image-registry.json`（此前 `versions: []`）。后续发版仍不得用空 descriptor、手写 digest、复制其他产品证据或从必需产品集合静默删除 reverse 来绕过阻塞。
 
-**v0.5.6 发版准备**（2026-10-15）：本版为补丁版，内容为 #736（Anthropic Messages 推理探测与网关认证头携带受治理的 Claude CLI 客户端指纹）、#730（部署就绪门禁、运行镜像恢复统计与远端对账边界）、#734（失败发布同名 tag 恢复守则）以及 #718 的 v0.5.5 准入证据绑定与文档收口。本版不修改数据库 schema（主线保持 v56），不改变运行镜像输入与 fingerprint，命中不可变 `src-*` 缓存时复用既有构建并仍执行规定的原生冒烟；控制面镜像因 Scheduler 源码变更随本次发布重建。剩余硬门与上一版相同：`v0.5.6` tag 触发的 Release 必须实际成功，产出真实不可变 digest、每个配置通道的 descriptor / inspect 证据、必需产品集合完整的 catalog 并通过最终双平台 payload 门禁，再由 workflow 回写 bundled registry 与部署 tag；tag 存在、CI 通过或部分镜像推送成功都不等于发布完成。
+**v0.5.6 发版准备**（2026-10-15）：本版为补丁版，内容为 #736（Anthropic Messages 推理探测与网关认证头携带受治理的 Claude CLI 客户端指纹）、#730（部署就绪门禁、运行镜像恢复统计与远端对账边界）、#734（失败发布同名 tag 恢复守则）以及 #718 的 v0.5.5 准入证据绑定与文档收口。上述准备项本身不修改数据库 schema；后续主线已由 #740 的平台级暂停领取与版本发现变更更新 schema，当前版本以 [`schema-version.ts`](../apps/scheduler/src/schema-version.ts) 为准，发布验收须覆盖最终合并内容。上述准备项不改变运行镜像输入与 fingerprint，命中不可变 `src-*` 缓存时复用既有构建并仍执行规定的原生冒烟；控制面镜像因 Scheduler 源码变更随本次发布重建。剩余硬门与上一版相同：`v0.5.6` tag 触发的 Release 必须实际成功，产出真实不可变 digest、每个配置通道的 descriptor / inspect 证据、必需产品集合完整的 catalog 并通过最终双平台 payload 门禁，再由 workflow 回写 bundled registry 与部署 tag；tag 存在、CI 通过或部分镜像推送成功都不等于发布完成。
 
 ## 可选发布凭据
 

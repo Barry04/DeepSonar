@@ -1,13 +1,11 @@
-# DeepSonar 项目方案（优化版）
+# DeepSonar 架构历史对照
 
-> **Current as-built correction (2026-09-06):** The local database and Web task API are the management path. Plane is optional integration, not an identity source or task prerequisite. Sections that describe Plane as the primary management truth are historical background and must not be used as implementation guidance.
+> 状态：**历史对照 / 已迁移（#741）**。本期保留旧正文，各一级章节就地链接现行权威；旧 MVP 草图、旧配置与开工顺序不得用作新实现依据。§17.5 发布硬门保留为执行摘要，不因归档豁免。
+> 同步日期：2026-10-15
+>
+> 先读 [DESIGN](../DESIGN.md) 摘要，再按[系统架构归属表](architecture/README.md)定位规格、视图及保留的专题细则。历史正文有相互矛盾的结论（例如 §16 增量迁移与 §17.2 基线重建），只保留追溯，不承诺兼容旧设计。
 
-> 版本：v1.1+（持续与代码对齐）  
-> 日期：2026-07-31 起稿 · **2026-09-06 状态：as-built 主路径以本地库 / Web 建项目任务为准**  
-> **阅读**：产品摘要先读仓库根 `DESIGN.md`；本文件为架构细则。冲突时以 **代码 + schema + OpenAPI + DESIGN** 为准。  
-> 文档目录索引：[`docs/README.md`](README.md)。
-
-**一句话（as-built）**：以**本地库为管理真相**（Web 直接建项目/任务；Plane 为**可选**集成），以任务画布为过程真相，以一次性沙箱为执行真相，以调度器为唯一副作用执行者；多角色 Agent 只提案，系统落地与记账。
+**历史摘要（原标 as-built）**：以**本地库为管理真相**（Web 直接建项目/任务；Plane 为**可选**集成），以任务画布为过程真相，以一次性沙箱为执行真相，以调度器为唯一副作用执行者；多角色 Agent 只提案，系统落地与记账。
 
 **可插拔原则**：能力、Skill、工具和运行时组件都通过准入目录和受治理接口组合。平台负责范围、沙箱、网络、凭据、预算、审计、幂等和结果落地；在这些边界以内，Agent 自主发现、选择、拉取、加载和组合能力。业务 Skill 不作为角色提示词或 RoleConfig 的隐式预装内容，Agent 的运行中拉取必须使用当前 Job 的受治理 Skill 操作。
 
@@ -22,6 +20,8 @@ Provider 账号到 RoleConfig 的 `role_credentials` 运行时兼容已删除（
 ---
 
 ## 1. 问题与目标
+
+> **迁移标记（#741）**：本节展开正文以[系统规格](architecture/01-system-specification.md)与[上下文](architecture/02-context-and-scope.md)为准。下文只供历史对照。
 
 ### 要解决什么
 
@@ -47,6 +47,8 @@ Provider 账号到 RoleConfig 的 `role_credentials` 运行时兼容已删除（
 ---
 
 ## 2. 总体架构
+
+> **迁移标记（#741）**：本节展开正文以[约束与原则](architecture/03-constraints-and-principles.md)及[构件视图](architecture/05-building-blocks.md)为准。下文只供历史对照。
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -85,6 +87,8 @@ Provider 账号到 RoleConfig 的 `role_credentials` 运行时兼容已删除（
 ---
 
 ## 3. 核心概念模型
+
+> **迁移标记（#741）**：本节展开正文以[数据架构](architecture/08-data-architecture.md)与[运行时视图](architecture/06-runtime-view.md)为准。下文只供历史对照。
 
 ### 3.1 实体关系
 
@@ -212,6 +216,8 @@ Issue #199 后，容器与共享资产卷另有不依赖 autoRemove 成功与否
 
 ## 4. 主流程（可执行路径）
 
+> **迁移标记（#741）**：本节展开正文以[运行时视图](architecture/06-runtime-view.md)与[锁序专题](ARCHITECTURE_SCHEDULER_BOUNDED_CONTEXTS.md)为准。下文只供历史对照。
+
 ### 4.1 项目初始化
 
 > **本地库为唯一真相，Plane 为可选集成。** Web 直接创建：`POST /projects`（plane_project_id 可空）→ `POST /projects/{id}/tasks`（同事务建任务画布 + root + pending job）。
@@ -298,6 +304,8 @@ Job”：同 Job ID 保留图与审计身份，但使用新 Attempt 和全新沙
 
 ## 5. 模块拆分与技术选型
 
+> **迁移标记（#741）**：本节展开正文以[构件视图](architecture/05-building-blocks.md)与[CLI 专题](AGENT_CLI_RUNTIME_ADAPTERS.md)为准。下文只供历史对照。
+
 | 模块 | 实现 | 说明 |
 |------|------|------|
 | **plane-client（可选）** | HTTP Client | 拉取绑定项目的 Issue、改状态、评论；字段映射 |
@@ -323,6 +331,8 @@ Job”：同 Job ID 保留图与审计身份，但使用新 Attempt 和全新沙
 ---
 
 ## 6. 数据表（MVP）
+
+> **迁移标记（#741）**：本节展开正文以[数据架构](architecture/08-data-architecture.md)，字段以 schema 为准为准。下文只供历史对照。
 
 ```text
 projects
@@ -497,6 +507,8 @@ Job 事件仍必须经过本摄入硬门。
 
 ## 7. API 草图（调度对外）
 
+> **迁移标记（#741）**：本节展开正文以[接口规范](architecture/09-interface-specs.md)，参数以 OpenAPI/shared-types 为准为准。下文只供历史对照。
+
 **事件写入（仅调度器内部，不暴露给沙箱）**
 
 - 语义事件由沙箱内 Agent 通过短期 capability token 调用 Job 级控制 API 提交，调度器在权威事务中落库：`{ event_id, type, payload }`
@@ -533,6 +545,8 @@ Job 事件仍必须经过本摄入硬门。
 ---
 
 ## 8. Agent 任务包与事件通道
+
+> **迁移标记（#741）**：本节展开正文以[运行时](architecture/06-runtime-view.md)、[接口](architecture/09-interface-specs.md)与[镜像部署](architecture/07-deployment-view.md)为准。下文只供历史对照。
 
 调度器通过 provider-neutral `RuntimeHost` 在一次性沙箱内以官方 CLI 协议拉起 Agent。每个 Job 都使用全新的 `/workspace`，任务内容只通过 Agent CLI 的 input 注入，不再生成 `task.json`，也不由 Scheduler 预下载或挂载代码。real 默认 OpenSandbox。
 
@@ -711,6 +725,8 @@ Hub 使用三档按需读图：L0 骨架随 Job 启动注入；Hub 通过有界�
 
 ## 9. 安全与资源策略
 
+> **迁移标记（#741）**：本节展开正文以[安全边界](architecture/10-security-and-trust-boundaries.md)与[质量属性](architecture/04-quality-attributes.md)为准。下文只供历史对照。
+
 ### 9.1 威胁建模：被审计代码 = 不可信输入
 
 这是审计平台与普通 AI 工作流的本质区别：
@@ -745,6 +761,8 @@ Hub 使用三档按需读图：L0 骨架随 Job 启动注入；Hub 通过有界�
 
 ## 10. 演进与 as-built
 
+> **迁移标记（#741）**：本节展开正文以[风险与技术债](architecture/12-risks-and-tech-debt.md)为准。下文只供历史对照。
+
 MVP 分阶段 checklist 已过时（主路径早已落地：本地任务、Hub 闭环、Verify/Report、镜像市场、多 CLI 等）。
 
 - **当前 as-built**：根目录 `DESIGN.md`、本文件与代码
@@ -754,6 +772,8 @@ MVP 分阶段 checklist 已过时（主路径早已落地：本地任务、Hub �
 ---
 
 ## 11. 目录结构
+
+> **迁移标记（#741）**：本节展开正文以[构件视图](architecture/05-building-blocks.md)为准。下文只供历史对照。
 
 ```text
 deepsonar/
@@ -776,6 +796,8 @@ deepsonar/
 ---
 
 ## 12. 配置项清单
+
+> **迁移标记（#741）**：本节展开正文以[质量属性](architecture/04-quality-attributes.md)和 [config.ts](../apps/scheduler/src/config.ts)为准。下文只供历史对照。
 
 ```text
 PLANE_BASE_URL=
@@ -846,6 +868,8 @@ CANVAS_LAYOUT=auto
 
 ## 13. 风险与对策
 
+> **迁移标记（#741）**：本节展开正文以[风险与技术债](architecture/12-risks-and-tech-debt.md)为准。下文只供历史对照。
+
 | 风险 | 对策 |
 |------|------|
 | Agent 胡写、死循环派生 | 白名单工具 + followup 频次/深度护栏 + 超限转人工 |
@@ -867,6 +891,8 @@ CANVAS_LAYOUT=auto
 
 ## 14. 开工顺序
 
+> **迁移标记（#741）**：本节展开正文以[运行时视图](architecture/06-runtime-view.md)，旧开工顺序仅作历史为准。下文只供历史对照。
+
 1. 建仓库 + `docker-compose`（Postgres）
 2. 按 §6 建表（**一次把 event_id / fingerprint / lease 字段建对**）
 3. 实现 `jobs` 状态机 + 手动 `POST /jobs` + Reaper
@@ -878,6 +904,8 @@ CANVAS_LAYOUT=auto
 ---
 
 ## 15. 结论摘要
+
+> **迁移标记（#741）**：本节展开正文以[上下文](architecture/02-context-and-scope.md)和[原则](architecture/03-constraints-and-principles.md)，旧 Plane/项目画布结论不再适用为准。下文只供历史对照。
 
 | 决策 | 选择 |
 |------|------|
@@ -896,6 +924,8 @@ CANVAS_LAYOUT=auto
 
 ## 16. 已知取舍（明确记录，避免后期争论）
 
+> **迁移标记（#741）**：本节展开正文以[ADR](architecture/adr/README.md)，旧取舍不代表当前契约为准。下文只供历史对照。
+
 - **单 Scheduler 实例**：MVP 假设单实例运行，claim 靠 DB 唯一约束兜底。多实例扩展时改用 `SELECT ... FOR UPDATE SKIP LOCKED` 竞争领取，接口不变
 - **DB 轮询而非 Webhook/Redis**：延迟秒级可接受；二期再升级
 - **画布不做多人协同编辑**：第一期只读展示 + 服务端写入；协同编辑是二期候选
@@ -913,6 +943,8 @@ CANVAS_LAYOUT=auto
 ---
 
 ## 17. 扩展性与演进策略（改表不慌的依据）
+
+> **迁移标记（#741）**：本节展开正文以[数据架构](architecture/08-data-architecture.md)和[工程规范](architecture/11-engineering-specs.md)；§17.5 的发版执行硬门继续有效为准。下文只供历史对照。
 
 ### 17.1 稳定区 vs 自由区
 
