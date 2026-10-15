@@ -8,7 +8,8 @@
  *   2. as-built 文档里引用的 `pnpm <script>` 都存在于根 `package.json`；
  *   3. 文档里的相对链接与图片都有目标文件；
  *   4. 已删机制（`project_managed` / `image_strategy` / `role_runtime_images` / `项目镜像策略`）
- *      只允许出现在已声明「解释移除」的文档里。
+ *      只允许出现在已声明「解释移除」的文档里；
+ *   5. `docs/architecture/**`（#741）纳入上述扫描，且每个文件文首标注状态与同步日期。
  *
  * 机检覆盖不到语义：**「as-built 段落是否与代码相反」仍需人工按清单第 3 项逐条核**，
  * 本套件只能在版本字面量、命令、链接和已删机制残留上兜底。
@@ -157,5 +158,35 @@ test("#696 已删机制只出现在解释性文档里", () => {
     [...new Set(offenders)].sort(),
     [],
     "已删机制出现在未声明的文档里；确需解释该机制时把文件加进本套件的 DEAD_TOKEN_DOCS，否则请改写为当前 as-built 说法",
+  );
+});
+
+/** #741：系统架构设计目录的文首必须在前若干行内声明状态与同步日期。 */
+const ARCHITECTURE_DIR = "docs/architecture";
+const ARCHITECTURE_HEADER_LINES = 12;
+
+test("#741 docs/architecture 纳入保鲜扫描且文首标注状态与同步日期", () => {
+  const files = relativeFiles(ARCHITECTURE_DIR, [".md"]);
+  for (const required of [`${ARCHITECTURE_DIR}/README.md`, `${ARCHITECTURE_DIR}/adr/README.md`]) {
+    assert.ok(files.includes(required), `缺少 ${required}`);
+  }
+  const scanned = new Set(docFiles());
+  assert.deepEqual(
+    files.filter((file) => !scanned.has(file)),
+    [],
+    "docs/architecture 下的文档必须被 docFiles() 扫描（相对链接、pnpm 脚本、已删机制门禁）",
+  );
+
+  const missingHeader: string[] = [];
+  for (const file of files) {
+    const head = read(file).split("\n").slice(0, ARCHITECTURE_HEADER_LINES).join("\n");
+    if (!/^> 状态：\S/m.test(head)) missingHeader.push(`${file}: 缺少「> 状态：」`);
+    if (!/^> 同步日期：\d{4}-\d{2}-\d{2}\s*$/m.test(head)) missingHeader.push(`${file}: 缺少「> 同步日期：YYYY-MM-DD」`);
+  }
+  assert.deepEqual(missingHeader, [], "docs/architecture 文档文首必须标注状态与同步日期（见 docs/architecture/README.md §3）");
+
+  assert.ok(
+    read("docs/README.md").includes("](architecture/README.md)"),
+    "docs/README.md 必须在「系统架构设计」分区链接 docs/architecture/README.md",
   );
 });

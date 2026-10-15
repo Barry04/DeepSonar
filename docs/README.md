@@ -26,6 +26,15 @@
 
 ---
 
+## 系统架构设计
+
+| 文档 | 状态 | 说明 |
+|------|------|------|
+| [architecture/README.md](architecture/README.md) | **骨架**（#741 PR 1） | 系统规格（编号需求）、上下文与边界、架构视图与 ADR 的目录索引、阅读路径、编号规则与维护流程；视图正文由 #741 后续 PR 补齐，补齐前以 `DESIGN.md` / `ARCHITECTURE.md` / 代码为准 |
+| [architecture/adr/README.md](architecture/adr/README.md) | **骨架**（#741 PR 1） | ADR 模板（背景 / 决策 / 状态 / 后果 / 替代方案）与编号规则；首批 6 条回填见 #741 PR 5 |
+
+---
+
 ## 契约与 as-built
 
 | 文档 | 状态 | 说明 |
