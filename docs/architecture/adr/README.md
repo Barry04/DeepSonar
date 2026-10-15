@@ -1,9 +1,9 @@
 # 架构决策记录（ADR）
 
-> 状态：**骨架（#741 PR 1）**。模板与编号规则已生效；首批 6 条 ADR 在 [#741](https://github.com/SummerSec/DeepSonar/issues/741) PR 5 回填，回填前相关结论仍以 [`DESIGN.md`](../../../DESIGN.md)、[`docs/README.md`](../../README.md) 与对应 issue 为准。
+> 状态：**as-built（#741 PR 5 历史回填）**。首批六条 ADR 只回填已有定案，不新增决策；历史原决策日期未在本次工作中核实，正文注明回填日期。
 > 同步日期：2026-10-15
 
-ADR 记录**已定案**的架构决策及其理由，让「为什么这样建」不再只留在 issue 讨论和索引表格里。目录总览与维护流程见 [`../README.md`](../README.md)。
+ADR 记录**已定案**的架构决策及其理由，让「为什么这样建」不再只留在 issue 讨论和索引表格里。目录总览与维护流程见 [`../README.md`](../README.md)。事实仍以 [`docs/architecture/README.md`](../README.md)、相关架构视图、代码、schema、OpenAPI 和测试为准；`DESIGN.md` 与 [`docs/README.md`](../../README.md) 提供摘要和专题状态。
 
 ---
 
@@ -48,12 +48,12 @@ ADR 记录**已定案**的架构决策及其理由，让「为什么这样建」
 
 | 编号 | 决策 | 状态 | 来源 |
 |------|------|------|------|
-| 0001 | 不向后兼容，废弃契约 fail closed | 计划回填（PR 5） | `AGENTS.md` / #690 |
-| 0002 | schema 单一基线 + 重建，不做增量 ALTER 链 | 计划回填（PR 5） | #34 |
-| 0003 | Agent 控制面 API-only，无 MCP / 文本回退 | 计划回填（PR 5） | #100 / #135 / #145 / #152 |
-| 0004 | Fact 证据信任态与 Finding Verify 分责 | 计划回填（PR 5） | #387 |
-| 0005 | events / evidence / stream-bus 三职责，bus 非权威 | 计划回填（PR 5） | #388 |
-| 0006 | 运行镜像统一由平台目录准入，Job 冻结 digest | 计划回填（PR 5） | #674 / #676 / #691 |
+| [0001](0001-no-backward-compatibility.md) | 不向后兼容，废弃契约 fail closed | 已采纳（历史回填） | [`DESIGN.md`](../../../DESIGN.md) / #690 |
+| [0002](0002-schema-baseline.md) | schema 单一基线 + 重建，不做增量 ALTER 链 | 已采纳（历史回填） | #34 / [`database/schema.sql`](../../../database/schema.sql) |
+| [0003](0003-api-only-control.md) | 语义控制写入只走 Job-scoped Control API | 已采纳（历史回填） | #100 / #135 / #145 / #152 |
+| [0004](0004-fact-and-finding-verification.md) | Fact 证据信任态与 Finding Verify 分责 | 已采纳（历史回填） | #387 / [`verify.ts`](../../../apps/scheduler/src/verify.ts) |
+| [0005](0005-event-evidence-stream.md) | events / evidence / stream-bus 三职责，bus 非权威 | 已采纳（历史回填） | #388 / [`process-stream-policy.ts`](../../../apps/scheduler/src/process-stream-policy.ts) |
+| [0006](0006-runtime-image-admission.md) | 运行镜像统一由平台目录准入，Job 冻结 digest | 已采纳（历史回填） | #674 / #676 / #691 / [`runtime-images.ts`](../../../apps/scheduler/src/runtime-images.ts) |
 
 ---
 

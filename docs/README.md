@@ -6,7 +6,7 @@
 
 > **阅读顺序（Agent / 贡献者）**  
 > 1. 仓库根 [`DESIGN.md`](../DESIGN.md) — as-built 产品与设计摘要  
-> 2. [`ARCHITECTURE.md`](ARCHITECTURE.md) — 架构细则（与 DESIGN 冲突时以 **代码 + DESIGN + schema + OpenAPI** 为准，并回写 DESIGN）  
+> 2. [`architecture/README.md`](architecture/README.md) — 系统规格、架构视图、追溯与 ADR；实现事实与规范要求分开，旧 ARCHITECTURE 按章节历史归档
 > 3. 本目录专题文档 — 见下表「状态」列  
 >
 > **GitHub Issues** 是当前主整改入口；开放演进以 `DESIGN.md` §12 与代码为准，勿把历史方案稿正文里的「现状问题」当缺陷清单。
@@ -30,8 +30,8 @@
 
 | 文档 | 状态 | 说明 |
 |------|------|------|
-| [architecture/README.md](architecture/README.md) | **骨架**（#741 PR 1） | 系统规格（编号需求）、上下文与边界、架构视图与 ADR 的目录索引、阅读路径、编号规则与维护流程；视图正文由 #741 后续 PR 补齐，补齐前以 `DESIGN.md` / `ARCHITECTURE.md` / 代码为准 |
-| [architecture/adr/README.md](architecture/adr/README.md) | **骨架**（#741 PR 1） | ADR 模板（背景 / 决策 / 状态 / 后果 / 替代方案）与编号规则；首批 6 条回填见 #741 PR 5 |
+| [architecture/README.md](architecture/README.md) | **文档基线（#741；2026-10-15）** | 十二篇规格与视图、主题权威归属、逐章迁移、[追溯矩阵](architecture/traceability.md)和[开发 Skill](../.agents/skills/architecture-doc-sync/SKILL.md)；实现事实、规范与验证证据分开 |
+| [architecture/adr/README.md](architecture/adr/README.md) | **六条既有决策回填（#741；2026-10-15）** | 不向后兼容、schema 基线、API-only、Fact/Verify 分责、三流存储与镜像准入；回填不新增决策 |
 
 ---
 
@@ -39,7 +39,7 @@
 
 | 文档 | 状态 | 说明 |
 |------|------|------|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | **as-built** | 威胁建模、状态机、存储、运行时；本地库/Web 是管理真相，Plane 仅为可选集成 |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | **历史对照 / 已迁移入口（#741）** | 每个一级章节标注权威目标；现行细则按 architecture 归属表定位，不从旧 MVP 草图推导实现 |
 | [AGENT_CLI_RUNTIME_ADAPTERS.md](AGENT_CLI_RUNTIME_ADAPTERS.md) | **as-built** | 当前三类 Agent CLI 适配器、能力、Session 归档+查看器接入清单；DSH 0.2.0-rc.2 profile/SDK smoke 与 v4 归档；**#389 DSH/Pi 解码三类契约与钉死版本夹具矩阵**；leftover Codex/OpenCode 只读 |
 | [AGENT_RUNTIME_CONTEXT.md](AGENT_RUNTIME_CONTEXT.md) | **as-built**（#138） | context_id / compaction / 恢复身份 |
 | [ARCHITECTURE_SCHEDULER_BOUNDED_CONTEXTS.md](ARCHITECTURE_SCHEDULER_BOUNDED_CONTEXTS.md) | **as-built**（#37） | 领域拆分与锁序；非「待实施」 |

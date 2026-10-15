@@ -1,6 +1,6 @@
 # AGENTS.md
 
-本文件是 DeepSonar 仓库内编码 Agent 的工作说明。它描述协作方式、事实入口和不可绕过的工程边界；细节冲突时以代码、`database/schema.sql`、OpenAPI 和测试为准。
+本文件是 DeepSonar 仓库内编码 Agent 的工作说明。它描述协作方式、事实入口和不可绕过的工程边界；实现事实以代码、`database/schema.sql`、OpenAPI 和测试为准；若实现违反已采纳约束，记录缺陷，不通过修改规范消除违约。
 
 ## 角色分工
 
@@ -21,12 +21,20 @@
 开始改动前按以下顺序阅读：
 
 1. [`DESIGN.md`](DESIGN.md)：当前 as-built 模型、内核边界、Hub、Capability Pack、Job、Verify、Research、Report、UI 和实现硬约束；
-2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)：完整架构、威胁模型、存储和状态机细节；
+2. [`docs/architecture/README.md`](docs/architecture/README.md)：系统规格、追溯矩阵、架构视图与 ADR；按改动面读取权威正文；
 3. [`docs/README.md`](docs/README.md)：专题文档的 as-built / 历史 / 进行中状态；
 4. [`docs/AI_NATIVE_TRUSTED_KERNEL.md`](docs/AI_NATIVE_TRUSTED_KERNEL.md)：长期 AI-native 可信内核、插件准入、RepairFeedback、Receipt 和 Crash Matrix；
 5. 代码、`database/schema.sql`、OpenAPI 和测试。
 
 历史 `*_PLAN.md`、旧 Issue 或角色名称都不能单独证明能力尚未落地。改完结构性设计或安全边界，必须同步更新 `DESIGN.md`、相关专题文档和状态索引。`CLAUDE.md` 应与本文件保持同步。
+
+## 系统功能变更文档同步（#741）
+
+涉及系统功能、领域规则、Control/Management API、数据库、状态机、运行时/镜像、安全权限或删除旧契约时，必须读取并执行仓库内[文档同步与检查 Skill](.agents/skills/architecture-doc-sync/SKILL.md)。它是开发治理 Skill，不是 Job 运行时业务能力。
+
+同一 PR 核对受影响需求 ID、追溯矩阵、对应架构视图、专题文档及 DESIGN/文档索引；重大取舍新增 ADR 或标记旧 ADR 被取代。提交摘要记录“变更面 → 文档/需求 → 验证结果”；核查后确实无需更新文档时，写明范围和理由，不机械刷新日期。规范要求、实现状态、运行证据分开；未执行的测试不能写成已通过。
+
+每个主题的权威正文及旧章节迁移状态见[归属表](docs/architecture/README.md)。旧 `docs/ARCHITECTURE.md` 保留作历史对照，不能单独作为现行实现依据。`CLAUDE.md` 是指向本文件的 Git 符号链接；Windows 禁用符号链接时检出为目标路径文本，不另维护副本。
 
 ## 常用命令
 
@@ -60,7 +68,7 @@ pnpm ci:smoke:hub
 pnpm ci:images
 ```
 
-`gate` 里的守则套件分散在多个脚本（如 `ci:unit:searchable-selects` 禁止原生 `<select>`、`ci:unit:file-size` 文件体量棘轮、`ci:unit:bounded-contexts` 固定路由面与 bounded-context 所有权、`ci:unit:docs-freshness` 文档保鲜），`ci:unit:web-facts` 覆盖不到：Web 或路由面改动要按需补跑，否则 CI 才第一次报错。`ci:unit:test-wiring` 保证每个 `*.test.ts` 都被某个 script 引用（未接线的进 `apps/scheduler/src/test-wiring.manifest.json` 基线，只能缩小），但**脚本本身是否被 workflow 调用仍需人工确认**：全量脚本见根目录 `package.json`，已进 CI 的以 `.github/workflows/ci.yml` 为准（`ci:unit:bounded-contexts` 自 #684 起已进 CI）。测试数据库需要 `TEST_DATABASE_URL`；只依赖真实沙箱的测试要明确检查运行时是否可用。镜像改动还要检查 Dockerfile、`.dockerignore`、runtime registry fingerprint、平台架构和体积预算。
+`gate` 里的守则套件分散在多个脚本（如 `ci:unit:searchable-selects` 禁止原生 `<select>`、`ci:unit:file-size` 文件体量棘轮、`ci:unit:bounded-contexts` 固定路由面与 bounded-context 所有权、`ci:unit:docs-freshness` 文档保鲜），`ci:unit:web-facts` 覆盖不到：Web 或路由面改动要按需补跑，否则 CI 才第一次报错。`ci:unit:authz` 内的 `ci-test-hook.test.ts` 保证每个被跟踪的 `*.test.ts` 都有测试入口引用（未接线的进 `apps/scheduler/src/ci-test-hook.manifest.json` 基线，只能缩小），但**脚本本身是否被 workflow 调用仍需人工确认**：全量脚本见根目录 `package.json`，已进 CI 的以 `.github/workflows/ci.yml` 为准（`ci:unit:bounded-contexts` 自 #684 起已进 CI）。测试数据库需要 `TEST_DATABASE_URL`；只依赖真实沙箱的测试要明确检查运行时是否可用。镜像改动还要检查 Dockerfile、`.dockerignore`、runtime registry fingerprint、平台架构和体积预算。
 
 ## 总体架构纪律
 
