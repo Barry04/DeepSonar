@@ -14,7 +14,7 @@ CREATE TABLE schema_meta (
   applied_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT schema_meta_id_check CHECK (id = 'global')
 );
-INSERT INTO schema_meta (id, version) VALUES ('global', 56);
+INSERT INTO schema_meta (id, version) VALUES ('global', 57);
 
 CREATE TABLE projects (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -929,14 +929,39 @@ CREATE INDEX agent_roles_project_idx
   ON agent_roles (project_id, builtin DESC, name)
   WHERE kind = 'role';
 
+-- #740：平台级全局暂停领取（管理员控制，持久化在单例行）。所有 Scheduler 副本在
+-- dispatch claim advisory lock 内读取；暂停只阻止新的 pending → claimed，不杀在途 Job。
+-- 暂停字段与 rules_json 分开存储：PATCH /global-settings、平台数据包导入不会改写它。
 CREATE TABLE global_settings (
   id text PRIMARY KEY DEFAULT 'global',
   rules_json jsonb NOT NULL DEFAULT '{}',
   updated_at timestamptz NOT NULL DEFAULT now(),
   runtime_registry_channel text NOT NULL DEFAULT 'aliyun-acr',
+  claims_paused boolean NOT NULL DEFAULT false,
+  claims_pause_reason text,
+  claims_pause_note text,
+  claims_paused_by text,
+  claims_paused_at timestamptz,
   CONSTRAINT global_settings_id_check CHECK (id = 'global'),
   CONSTRAINT global_settings_runtime_registry_channel_check
-    CHECK (runtime_registry_channel IN ('github', 'dockerhub', 'aliyun-acr'))
+    CHECK (runtime_registry_channel IN ('github', 'dockerhub', 'aliyun-acr')),
+  CONSTRAINT global_settings_claims_pause_check CHECK (
+    (
+      claims_paused = false
+      AND claims_pause_reason IS NULL
+      AND claims_pause_note IS NULL
+      AND claims_paused_by IS NULL
+      AND claims_paused_at IS NULL
+    )
+    OR (
+      claims_paused = true
+      AND claims_pause_reason IN ('platform_upgrade', 'maintenance')
+      AND claims_paused_by IS NOT NULL
+      AND char_length(claims_paused_by) BETWEEN 1 AND 200
+      AND claims_paused_at IS NOT NULL
+      AND (claims_pause_note IS NULL OR char_length(claims_pause_note) BETWEEN 1 AND 500)
+    )
+  )
 );
 
 CREATE TABLE api_tokens (

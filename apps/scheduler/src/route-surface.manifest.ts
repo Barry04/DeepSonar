@@ -75,6 +75,7 @@ GET /jobs/:id/evidence/session/download
 GET /jobs/:id/evidence/stream
 GET /metrics
 GET /openapi.json
+GET /platform/claims
 GET /platform/exports
 GET /platform/shared-assets
 GET /projects
@@ -173,6 +174,8 @@ POST /jobs
 POST /jobs/:id/cancel
 POST /jobs/:id/resume
 POST /jobs/:id/rerun-current
+POST /platform/claims/pause
+POST /platform/claims/resume
 POST /platform/exports
 POST /platform/shared-assets
 POST /projects
@@ -280,6 +283,7 @@ GET /jobs/{id}/evidence/session/download
 GET /jobs/{id}/evidence/stream
 GET /metrics
 GET /openapi.json
+GET /platform/claims
 GET /platform/exports
 GET /platform/shared-assets
 GET /projects
@@ -373,6 +377,8 @@ POST /jobs
 POST /jobs/{id}/cancel
 POST /jobs/{id}/rerun-current
 POST /jobs/{id}/resume
+POST /platform/claims/pause
+POST /platform/claims/resume
 POST /platform/exports
 POST /platform/shared-assets
 POST /projects

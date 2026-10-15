@@ -164,6 +164,9 @@ Agent 不调用这些 HTTP 上传接口；运行中使用 Job 按 RoleConfig 冻
 | 方法 | 路径 | Scope | 说明 |
 | --- | --- | --- | --- |
 | GET | /global-settings | agents:read | `{rules, effective_rules, active_by_agent_cli, active_by_provider}`；`effective_rules` 含 `maxGlobalJobs` / `maxJobsPerProject` / `maxConcurrentByAgentCli` |
+| GET | /platform/claims | tasks:read | #740 平台级全局暂停领取状态：`{claims_paused, reason, note, paused_by, paused_at, state: running\|pausing\|paused, drained, in_flight:{claimed,provisioning,running,total}, pending, waiting_human, effect_pending_attempts, unknown_effect_attempts}`。项目级 token 403 `PLATFORM_CLAIMS_PROJECT_TOKEN_FORBIDDEN` |
+| POST | /platform/claims/pause | admin | `{reason: platform_upgrade\|maintenance, note?}`（strict，note ≤500）。持久化、跨副本生效、重启保持；只阻止新领取，不取消在途 Job。同原因幂等 `changed=false`；其他原因已暂停 409 `PLATFORM_CLAIMS_ALREADY_PAUSED`。审计 `platform.claims_pause` |
+| POST | /platform/claims/resume | admin | `{reason?}`：带 reason 时仅当前原因一致才解除，否则 409 `PLATFORM_CLAIMS_PAUSE_REASON_MISMATCH`；未暂停幂等。`pg_notify` 唤醒调度，审计 `platform.claims_resume` |
 | PATCH | /global-settings | agents:write | `{rules: {...}, finding_protocol?}` 合并；`finding_protocol` 只能走顶层字段。claim 读 effective 并由 `pg_notify` 唤醒。并发默认 **20 / 5**（env/代码）；库 `rules_json` 优先。Finding 协议默认 **CVSS 3.1**（接受 3.1/4.0），模式 hybrid/fixed |
 | GET | /projects/:id/settings | agents:read | 项目规则覆盖 + 角色启用 + `effective_rules.maxConcurrentJobs` / `maxConcurrentJobsSource` + `active_jobs` |
 | PATCH | /projects/:id/settings | agents:write | `{rules?, roles?: {enabled: string[] \| null}, finding_protocol?}`；`rules.maxConcurrentJobs` 为 `0–1000` 或 `null`（清除继承全局）；`enabled: null` 恢复默认 |

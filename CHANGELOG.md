@@ -1,8 +1,16 @@
 ## [Unreleased]
 
+### 新增
+
+- **平台级全局暂停领取（#740 P1 第一片）**：新增持久化在 `global_settings` 单例行的 `claims_paused`（`reason=platform_upgrade|maintenance`、说明、操作者、时间）。所有 Scheduler 副本在 dispatch claim advisory lock 内读取，暂停与领取严格线性化，重启后保持；单例行缺失 fail closed。暂停只阻止新的 `pending → claimed`，不取消、不杀、不重放在途 Job，新任务仍可入队。新增管理 API `GET /platform/claims`（状态、`running` / `pausing` / `paused`、claimed / provisioning / running 在途数、活跃 Attempt 上 `effect_pending` / `unknown` 效果数）、`POST /platform/claims/pause`、`POST /platform/claims/resume`（可按原因解除，唤醒调度）；暂停 / 恢复仅平台管理员，项目级 token 拒绝，写审计。Web 所有页面在暂停期间显示全局横幅；新增指标 `deepsonar_platform_claims_paused`。版本发现、digest 部署契约与 `deploy.sh` / `deploy.ps1` 的 `upgrade` 子命令属于 #740 后续 PR。
+
 ### 文档
 
 - **系统架构设计目录骨架（#741 PR 1）**：新增 `docs/architecture/`，`README.md` 定义目录索引、阅读路径、文档状态（文首「状态 + 同步日期」）、文件 / 需求 ID（`FR-<域>-NNN` / `NFR-<属性>-NNN` / `IR-NNN` / `CON-NNN`）编号规则与维护流程；`adr/README.md` 给出 ADR 模板（背景 / 决策 / 状态 / 后果 / 替代方案）、四位编号与状态规则及首批 6 条回填索引。`docs/README.md` 新增「系统架构设计」分区；`pnpm ci:unit:docs-freshness` 新增断言：新目录纳入相对链接 / 脚本 / 已删机制扫描，且每个文件文首标注状态与同步日期。不改代码、schema、OpenAPI 与运行时行为；系统规格、视图与 ADR 正文由 #741 后续 PR 补齐。
+
+### 部署 / 升级说明
+
+- 本次改动修改数据库 schema：主线 **v56 → v57**（`global_settings` 新增暂停列）。已有数据库须先停 Scheduler，再执行 `pnpm db:rebuild -- --plan` / `--apply`（无增量 ALTER 链，旧库 fail closed）。Compose 镜像引用本次不变，仍为 `DEEPSONAR_IMAGE_TAG`。
 
 ## [0.5.6] - 2026-10-15
 

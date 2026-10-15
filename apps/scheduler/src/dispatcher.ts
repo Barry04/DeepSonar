@@ -146,6 +146,7 @@ import {
 import { bindScheduleWake, refreshScheduleWakeFromDb } from "./schedule-wake.js";
 import { canvasScheduleBlocksDispatch } from "./task-schedule.js";
 import { canvasExecutionIsPaused } from "./task-execution-control.js";
+import { readPlatformClaimsControl } from "./domains/platform-claims/store.js";
 import { hostDiskAllowsDispatch, refreshHostDiskPressure } from "./host-disk.js";
 import { openSandboxAllowsDispatch, refreshOpenSandboxServerStatus } from "./opensandbox-health.js";
 import {
@@ -602,6 +603,20 @@ async function graphEligibilityReasonFromDb(
   );
 }
 
+let platformClaimsPauseLogged: string | null = null;
+
+/** Log the platform claim pause once per reason instead of on every dispatch wake-up. */
+function logPlatformClaimsPaused(reason: string | null): void {
+  const key = reason ?? "unknown";
+  if (platformClaimsPauseLogged === key) return;
+  platformClaimsPauseLogged = key;
+  if (key === "global_settings_missing") {
+    console.error("[dispatcher] PLATFORM_CLAIMS_STATE_MISSING: global_settings row missing; new claims paused (fail closed)");
+  } else {
+    console.warn(`[dispatcher] PLATFORM_CLAIMS_PAUSED reason=${key}: new claims paused until an admin resumes`);
+  }
+}
+
 /**
  * 在调度器 advisory lock 下抢占 pending Job，但不执行 provision 或 Agent。
  * 集成测试通过这个窄入口独立验证数据库侧配额决策。
@@ -648,6 +663,16 @@ export async function claimPendingJobs(): Promise<{ id: string }[]> {
   // 即使未来误启动两个 Scheduler，也不会出现先 count 后 update 的超配竞态。
   const claimedJobs = await sql.begin(async (tx) => {
     await tx`SELECT pg_advisory_xact_lock(hashtext(${DISPATCH_CLAIM_ADVISORY_KEY}))`;
+    // #740 platform-wide claim pause: read under the same advisory lock the
+    // pause API takes, so every replica observes a committed pause before
+    // claiming. A missing singleton row fails closed.
+    // SAFETY: postgres.js transaction handle exposes the same tagged-template interface as sql.
+    const platformClaims = await readPlatformClaimsControl(tx as unknown as typeof sql);
+    if (platformClaims.paused) {
+      logPlatformClaimsPaused(platformClaims.missing ? "global_settings_missing" : platformClaims.reason);
+      return [] as { id: string }[];
+    }
+    platformClaimsPauseLogged = null;
     const lifecycle = createSqlJobLifecycleApplication(tx as unknown as typeof sql);
     // global_settings is the scheduler-wide hard cap; per-project
     // maxConcurrentJobs may only tighten maxJobsPerProject at claim time.
