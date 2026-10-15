@@ -1,6 +1,6 @@
 # 运行时镜像发布（Issue #70 Slice B）
 
-> **状态：运维 as-built（2026-10-14）**。**v0.5.5 已发布**（GitHub Release + run [38506851988](https://github.com/SummerSec/DeepSonar/actions/runs/38506851988) 全绿）：`deepsonar-reverse` canonical `sha256:45b538274f513933135bd895d7350d51c7c0a557e5784a77e74b4be9b82820b8` 已回写 bundled registry，GHCR / Docker Hub / ACR 三通道 inspect 通过；v0.5.4 曾因 ACR / Docker Hub 通道失败未完成 Release（tag 不移动），v0.5.5 带上 #732 重试后成功。改 CLI 钉死版本后须打 `v*` 才会重建官方 Agent 镜像。索引：[`README.md`](README.md)。
+> **状态：运维 as-built（2026-10-15）**。**v0.5.5 已发布**（GitHub Release + run [38506851988](https://github.com/SummerSec/DeepSonar/actions/runs/38506851988) 全绿）：`deepsonar-reverse` canonical `sha256:45b538274f513933135bd895d7350d51c7c0a557e5784a77e74b4be9b82820b8` 已回写 bundled registry，GHCR / Docker Hub / ACR 三通道 inspect 通过；v0.5.4 曾因 ACR / Docker Hub 通道失败未完成 Release（tag 不移动），v0.5.5 带上 #732 重试后成功。**v0.5.6 发版准备中**（#736 Anthropic 探测客户端指纹、#730 部署就绪门禁与镜像恢复统计、#734 失败发布恢复守则）：本节日期与 compare link 仅用于发布准备，不证明 tag 已存在；`v0.5.6` tag 触发的 Release 真实成功与各通道 inspect 证据仍是硬门。改 CLI 钉死版本后须打 `v*` 才会重建官方 Agent 镜像。索引：[`README.md`](README.md)。
 >
 > Scheduler / runtime-sandbox 契约修复的**部署生效与自检**：[`RUNTIME_IMAGE_CONTRACT_DEPLOY.md`](RUNTIME_IMAGE_CONTRACT_DEPLOY.md)（#636）。
 
@@ -29,7 +29,7 @@
 pnpm ci:unit:docs-freshness
 pnpm ci:unit:changelog
 # 另按本次目标校验真实 changelog 区段，例如：
-node agent-harness/validate-changelog.mjs --file CHANGELOG.md --version 0.5.5 --previous-version 0.5.4 --tag v0.5.5
+node agent-harness/validate-changelog.mjs --file CHANGELOG.md --version 0.5.6 --previous-version 0.5.5 --tag v0.5.6
 pnpm typecheck
 pnpm build
 pnpm ci:images
@@ -38,6 +38,8 @@ pnpm ci:images
 先按 `AGENTS.md` 的发版硬门完成人工 as-built 文档核对，再等待最终 `main` 提交的 CI 通过，才创建并推送新的不可变 `vX.Y.Z` tag。`ci:unit:changelog` 验证校验器本身的用例，上面的 `validate-changelog.mjs` 命令才验证真实待发布区段；每次发布需改为本次目标和实际前一 tag。`ci.yml` 的 `push@main` 会跳过纯文档提交，因此文档版 release-prep 合入后，应在 Actions 手动触发 `ci` 的 `workflow_dispatch` 并核对运行 SHA 为最终待打 tag 的提交。纯文档 PR 仍运行核心 CI；专项 workflow 是否触发由各自 paths 决定。运行镜像输入及 `BASE_IMAGE` digest 未变且 immutable `src-*` cache 可用时，核心 CI 可复用既有构建，仍执行规定的真实冒烟；不要为缩短发版时间改动 fingerprint 或跳过门禁。Release workflow 会在镜像构建前再次校验 tag、目标 changelog 区段和 compare link；校验失败时不会构建或发布镜像。工作流将经过校验的精确 changelog 区段写入 GitHub Release，同时保留许可证声明、runtime registry、Management Skill 附件和 GitHub 生成的 compare notes。
 
 **v0.5.5 发布结果**（v0.5.4 tag 不移动；其 Release 中 `reverse-images` 曾把 GHCR index 推送成功但 ACR / Docker Hub `imagetools create` 失败；#732 为 `publish-reverse-runtime.mjs` 补上 HTTP/1.1、每次 15 分钟、最多 3 次重试）：v0.5.5 tag 触发的 Release 已全部成功——真实不可变 digest、`reverse.json`、三通道 inspect、证据附件 `deepsonar-reverse-evidence-0.5.5.tar.gz`，并由 workflow 把 `deepsonar-reverse` `0.5.5` 回写 `deploy/runtime-image-registry.json`（此前 `versions: []`）。后续发版仍不得用空 descriptor、手写 digest、复制其他产品证据或从必需产品集合静默删除 reverse 来绕过阻塞。
+
+**v0.5.6 发版准备**（2026-10-15）：本版为补丁版，内容为 #736（Anthropic Messages 推理探测与网关认证头携带受治理的 Claude CLI 客户端指纹）、#730（部署就绪门禁、运行镜像恢复统计与远端对账边界）、#734（失败发布同名 tag 恢复守则）以及 #718 的 v0.5.5 准入证据绑定与文档收口。本版不修改数据库 schema（主线保持 v56），不改变运行镜像输入与 fingerprint，命中不可变 `src-*` 缓存时复用既有构建并仍执行规定的原生冒烟；控制面镜像因 Scheduler 源码变更随本次发布重建。剩余硬门与上一版相同：`v0.5.6` tag 触发的 Release 必须实际成功，产出真实不可变 digest、每个配置通道的 descriptor / inspect 证据、必需产品集合完整的 catalog 并通过最终双平台 payload 门禁，再由 workflow 回写 bundled registry 与部署 tag；tag 存在、CI 通过或部分镜像推送成功都不等于发布完成。
 
 ## 可选发布凭据
 
