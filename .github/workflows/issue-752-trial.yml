@@ -47,6 +47,7 @@ jobs:
       - run: pnpm -r build
       - run: pnpm -r typecheck
       - run: pnpm ci:unit:job-lifecycle
+      - run: pnpm ci:unit:credential-compatibility
       - run: pnpm ci:unit:project-knowledge
       - run: pnpm ci:integration:project-knowledge
       - run: pnpm ci:unit:web-facts
