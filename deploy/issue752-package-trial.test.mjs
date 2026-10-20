@@ -59,6 +59,7 @@ test("trial workflow cannot publish before checks and live authorization", () =>
   const workflow = readFileSync(join(repoRoot, ".github/workflows/issue-752-trial.yml"), "utf8");
   assert.match(workflow, /branches: \[codex\/issue-752-project-knowledge\]/);
   assert.match(workflow, /needs: \[checks, live-authorization\]/);
+  assert.match(workflow, /include-hidden-files: true/, "the offline bundle must retain deployment/deploy/.env.example");
   assert.match(workflow, /project-knowledge-job\.e2e\.ts/);
   assert.match(workflow, /pnpm --filter @deepsonar\/scheduler exec tsx/);
   assert.match(workflow, /docker save --output/);

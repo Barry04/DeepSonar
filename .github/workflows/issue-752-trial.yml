@@ -46,6 +46,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r build
       - run: pnpm -r typecheck
+      - run: pnpm ci:unit:job-lifecycle
       - run: pnpm ci:unit:project-knowledge
       - run: pnpm ci:integration:project-knowledge
       - run: pnpm ci:unit:web-facts
@@ -166,3 +167,4 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+          include-hidden-files: true

@@ -57,13 +57,17 @@ try {
     DEEPSONAR_GATEWAY_PROXY_UPSTREAM_URL: "http://host.docker.internal:3100/gateway" });
   model = await startKnowledgeJobModel();
   const [{ default: Fastify }, database, runtime, dispatcher, platform, gateway, credentials, snapshots, workers,
-    { freezeProjectKnowledgeCatalog, projectSkillSelector }, { freezeJobSkillCatalog }, blobs] = await Promise.all([
+    { freezeProjectKnowledgeCatalog, projectSkillSelector }, { freezeJobSkillCatalog }, blobs,
+    { admitCliCapabilities }, { assertFrozenCliCapabilities }, { DEFAULT_FINDING_PROTOCOL }] = await Promise.all([
     import(schedulerRequire.resolve("fastify")), import("../../apps/scheduler/src/db.js"), import("../../apps/scheduler/src/runtime.js"),
     import("../../apps/scheduler/src/dispatcher.js"), import("../../apps/scheduler/src/domains/platform-api/index.js"),
     import("../../apps/scheduler/src/gateway.js"), import("../../apps/scheduler/src/credentials.js"),
     import(schedulerRequire.resolve("@deepsonar/runtime-sandbox")), import("../../apps/scheduler/src/domains/worker-nodes/index.js"),
     import("../../apps/scheduler/src/domains/project-knowledge/catalog-snapshot.js"), import("../../apps/scheduler/src/job-skill-catalog.js"),
     import("../../apps/scheduler/src/domains/project-knowledge/blobs.js"),
+    import("../../apps/scheduler/src/domains/cli-capability/admit.js"),
+    import("../../apps/scheduler/src/domains/cli-capability/frozen.js"),
+    import("../../apps/scheduler/src/finding-protocol.js"),
   ]);
   sql = database.sql; runner = runtime.runner; drain = () => dispatcher.drainInFlight(60_000);
   await database.migrate();
@@ -103,6 +107,8 @@ try {
   const memory = await createVersion("memory", "private-memory", memoryBody.title, memoryBody);
   const selector = projectSkillSelector({ item_id: skill.itemId, version: 1 } as never);
   const actor = await readFile(path.join(root, "agent-harness/opensandbox/knowledge-job-actor.py"), "utf8");
+  const admitted = admitCliCapabilities({ ids: [], imageKey: "deepsonar-reverse" });
+  assert.ok(admitted.ok);
   const file = (name: string, content: string) => ({ path: name, content,
     content_sha256: createHash("sha256").update(content).digest("hex") });
   const createJob = async (mode: string) => {
@@ -119,15 +125,17 @@ try {
       config_files: [file("knowledge-job-actor.py", actor), file("knowledge-job-input.json", JSON.stringify(config))],
       settings_config_json: {}, pi_extensions: [], role_description: "Real project knowledge smoke", instructions_markdown: null,
       context_window_tokens: 200000, platform_tools: ["search_skills", "pull_skill", "search_project_knowledge", "read_project_memory",
-        "emit_progress", "mark_job_done"], cli_capabilities: [], cli_capability_pack: null,
+        "emit_progress", "mark_job_done"], cli_capabilities: admitted.frozen, cli_capability_pack: admitted.pack,
       project_knowledge_catalog: catalog, job_skill_catalog: jobSkillCatalog,
       network_policy: { allow_egress: false }, sandbox_limits: { cpu: 2, memoryMiB: 4096, pidsLimit: 512, capDropAll: true, noNewPrivileges: true },
       runtime_image: { image_key: "deepsonar-reverse", image_ref: imageRef, image_digest: imageDigest,
         runtime_image_id: null, runtime_image_version_id: null, admission_scan_id: null, tools_manifest_sha256: manifestSha,
         manual: toolManifest.manual, contract_version: "deepsonar.runtime.contract/v1" },
     };
+    assertFrozenCliCapabilities(snapshot);
     await sql`INSERT INTO canvases(id,project_id,title,target_json) VALUES(${canvasId},${consumer},${`Knowledge ${mode}`},
-      ${sql.json({ network_policy: { allow_egress: false }, convergence: { hub_paused: true, auto_stopped: false,
+      ${sql.json({ network_policy: { allow_egress: false }, effective_finding_protocol: DEFAULT_FINDING_PROTOCOL,
+        convergence: { hub_paused: true, auto_stopped: false,
         paused_reason: "knowledge_smoke_hub_out_of_scope" } })})`;
     await sql`INSERT INTO canvas_nodes(canvas_id,node_type,title,status,body_json) VALUES(${canvasId},'root','Knowledge smoke','active','{}')`;
     await sql`INSERT INTO jobs(id,project_id,canvas_id,type,status,agent_snapshot_json,payload_json,timeout_sec)
