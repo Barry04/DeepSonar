@@ -1,7 +1,7 @@
 # 07 部署视图
 
 > 状态：**as-built**（#741）。描述生产 Compose、运行时网络、镜像准入、远程 Worker/设备和多副本限制；地址与凭据由部署环境提供。
-> 同步日期：2026-10-15
+> 同步日期：2026-10-20
 
 部署事实来自 `deploy/` 下的 Compose 文件、运行时包和镜像准入代码。下图省略了环境变量值、镜像摘要和密钥，只保留拓扑和连接方向。当前 Compose 的 Scheduler、Web、image-admission 等平台服务通过 `DEEPSONAR_IMAGE_TAG` 选择 Release 同步的应用镜像标签；OpenSandbox/Worker 的基础服务可由 Compose 使用摘要固定。Job runtime image 则必须经过准入并在快照中保存解析后的不可变 digest，二者不能混为一谈。#745 新增的 `platform` catalog 结构目前只用于版本发现和管理员提示，不能据此宣称平台 Compose 已按 digest 部署。
 
@@ -59,6 +59,8 @@ flowchart LR
 Scheduler 在 catalog 同步路径比较当前部署版本与 registry 的 `platform` 段（没有该段时使用 `platform_version`），把最近一次结果写入 `platform_update_checks` 单例；管理员可通过只读 `GET /platform/updates` 读取最近一次检查结果，Web 只显示版本提示。该域不执行 `upgrade`、`apply` 或 `rollback`。Release workflow 写出并核对真实 platform digests、仅以不可变 digest 驱动 Compose，以及 `deploy.sh upgrade` 仍未实现；当前平台 Compose 继续使用发布 tag 流程。相关后续和边界见 [平台自动更新后续阶段](12-risks-and-tech-debt.md)。
 
 ## 多副本和共享存储限制
+
+#752 分支的项目知识版本与 work 元数据在 PostgreSQL v60 基线，候选正文、冻结输入和试验证据经现有内容寻址 Blob/共享资产路径保存；没有单独的知识服务、执行集群或自动 GC。部署前须按基线重建流程验证备份与列交集回填，不能让非空 v59 库由启动代码自动升级。知识 case×arm 使用现有 Dispatcher 和沙箱资源，真实环境试验与生产部署状态应另行记录，不能从集成夹具推定。独立分支的试运行流水线仅在前置检查和真实授权冒烟通过后上传 `linux/amd64` 控制面归档，不推 registry、不打 tag、不发布，也不证明完整 maker→reviewer 模型效果；实际运行结果尚待核对。详见[项目知识专题](../PROJECT_KNOWLEDGE.md)与[试运行产物说明](../ISSUE_752_TRIAL.md)。
 
 PostgreSQL 是跨 Scheduler 副本的管理真相，Silo/S3 是生产 Blob 存储；副本不应依赖各自本地磁盘保存可见 Evidence。过程流的实时总线只做非权威投递。Evidence catch-up 读取当前副本的本地 `BLOB_DIR`；若请求落到没有同一文件的副本，响应必须标注 `visibility=unavailable` 并按协议关闭 WS（代码使用 4415），不能从另一副本猜测或伪造补读。
 
