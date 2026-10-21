@@ -69,7 +69,7 @@ schema 由 v59 升为 v60，使用基线重建。已在独立 PostgreSQL 16 容�
 
 ### 2026-10-21 审查验收边界
 
-本轮在 main `c5a1e7e0` 基础上复查 #756，补齐 create 候选的同身份修订与 PostgreSQL 回归；并发 Scheduler 领取、重建 Scheduler 实例后的未知效果停止及累计预算耗尽都有可复跑数据库断言。测试入口仍为上述知识集成脚本，并由常规 CI 调用。
+本轮在 main `c5a1e7e0` 基础上复查 #756，补齐 create 候选的同身份修订与 PostgreSQL 回归；并发 Scheduler 领取、重建 Scheduler 实例后的未知效果停止及累计预算耗尽都有可复跑数据库断言。测试入口仍为上述知识集成脚本，并由常规 CI 调用。Reverse 真实 Job 验收夹具也必须先持久化 Skill 源 CAS 清单，再冻结全局和项目知识目录；直接插入旧形态快照会被运行时以 `JOB_SKILL_CATALOG_MISSING` 拒绝。数据库回归同时验证旧夹具拒绝与当前快照的搜索/拉取成功。
 
 这些测试使用合成任务/评测记录，证明存储、状态转换和权限硬门；不证明 LLM 能正确生成、独立评测或审查方法。专用授权烟测的固定模型响应也只能证明 Dispatcher/OpenSandbox/Control API 授权链路。完整模型验收仍须保存任务 A 的 maker → case×arm trial → evaluator → reviewer → 激活，以及任务 B 的精确版本使用 → 失败反馈 → 同身份修订的 Job/Attempt/Receipt/Evidence、模型版本、用量和退出码。完整链路未通过前不得据此关闭 #752 或宣称生产模型效果已验收。
 

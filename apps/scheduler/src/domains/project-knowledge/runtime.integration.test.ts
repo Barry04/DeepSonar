@@ -1,9 +1,11 @@
 import test from "node:test";
+import { scanSkillSourceRepo } from "../../skill-sources.js";
+import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { seedKnowledgeJob, withKnowledgeDatabase } from "./test-support.js";
 import { freezeProjectKnowledgeCatalog, projectSkillSelector } from "./catalog-snapshot.js";
-import { freezeJobSkillCatalog } from "../../job-skill-catalog.js";
+import { persistSkillSourceManifest, freezeJobSkillCatalog } from "../../job-skill-catalog.js";
 import { writeKnowledgeBlob, registerKnowledgeBlob } from "./blobs.js";
 import { createKnowledgeRuntime } from "./runtime.js";
 import { setSharedAssetBlobStoreForTests, type BlobStore } from "../../blob-store/index.js";
@@ -45,6 +47,44 @@ test("runtime discovery filters grants, pull creates stable usage, and repeat af
       assert.equal((await runtime({ ...context, operationId: "search_skills", input: { query: "authorized" } }))!.total, 0);
       await assert.rejects(runtime({ ...context, operationId: "pull_skill", input }),
         (error) => error instanceof PlatformRuntimeHandlerError && error.rejection?.errorCode === "KNOWLEDGE_REVOKED");
+    });
+  } finally { setSharedAssetBlobStoreForTests(null); }
+});
+
+
+test("real runtime rejects an unfrozen REA fixture and accepts its persisted source snapshot", async () => {
+  const bytes = new Map<string, Buffer>();
+  setSharedAssetBlobStoreForTests({
+    kind: "fs", put: async (key, content) => { bytes.set(key, Buffer.from(content)); },
+    exists: async (key) => bytes.has(key), get: async (key) => bytes.get(key)!,
+    materializeLocal: async () => { throw new Error("unused"); },
+  } satisfies BlobStore);
+  try {
+    await withKnowledgeDatabase(async (db) => {
+      const job = await seedKnowledgeJob(db, undefined, ["search_skills", "pull_skill"]);
+      const sourceId = randomUUID();
+      const catalog = scanSkillSourceRepo(fileURLToPath(new URL("../../../../../skills", import.meta.url)));
+      await db`INSERT INTO skill_sources(id,name,repo_url,trust_status,enabled,catalog_json)
+        VALUES(${sourceId},'REA fixture','https://github.com/SummerSec/DeepSonar','trusted',true,${db.json(catalog)})`;
+      const runtime = createKnowledgeRuntime({ db, governanceHash: "a".repeat(64) });
+      const context = { jobId: job.jobId, projectId: job.projectId, canvasId: job.canvasId,
+        eventId: randomUUID(), tokenId: randomUUID(), idempotencyKey: randomUUID() };
+      const search = { ...context, operationId: "search_skills", input: { query: "deepsonar-rea-cli" } };
+      await assert.rejects(runtime(search), (error) => error instanceof PlatformRuntimeHandlerError
+        && error.rejection?.errorCode === "JOB_SKILL_CATALOG_MISSING");
+      await assert.rejects(freezeJobSkillCatalog(db, job.projectId), /snapshot|manifest/i);
+      const manifest = await persistSkillSourceManifest(db, { sourceId, commitSha: null, catalog });
+      await db`UPDATE skill_sources SET catalog_snapshot_hash=${manifest} WHERE id=${sourceId}`;
+      await db`UPDATE jobs SET agent_snapshot_json=${db.json({ platform_tools: ["search_skills", "pull_skill"],
+        job_skill_catalog: await freezeJobSkillCatalog(db, job.projectId),
+        project_knowledge_catalog: await freezeProjectKnowledgeCatalog(db, job.projectId) } as never)} WHERE id=${job.jobId}`;
+      const result = await runtime(search);
+      const entry = (result!.skills as Array<{ selector: string; content_hash: string; name: string }>).find((item) => item.name === "deepsonar-rea-cli");
+      assert.ok(entry);
+      const pulled = await runtime({ ...context, operationId: "pull_skill",
+        input: { selector: entry.selector, expected_content_hash: entry.content_hash } });
+      assert.equal(pulled!.accepted, true);
+      assert.equal(typeof pulled!.usage_ref, "string");
     });
   } finally { setSharedAssetBlobStoreForTests(null); }
 });
