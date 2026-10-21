@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { KnowledgeControlPayloadSchemas, KNOWLEDGE_OPERATION_IDS, KnowledgeMutationPayload } from "./project-knowledge.js";
 export * from "./project-knowledge.js";
+import { RepairFeedback as ReadinessRepairFeedback } from "./repair-feedback.js";
 import {
   DescribeCapabilityPayload,
   ListCapabilitiesPayload,
@@ -1105,6 +1106,7 @@ export const ReadinessCheck = z.object({
   credential: ReadinessCredentialSummary.nullish(),
   runtime_image: ReadinessRuntimeImageSummary.nullish(),
   evidence: ReadinessEvidenceSummary.nullish(),
+  repair: ReadinessRepairFeedback.optional(),
 });
 export type ReadinessCheck = z.infer<typeof ReadinessCheck>;
 

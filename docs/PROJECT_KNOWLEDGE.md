@@ -1,6 +1,6 @@
 # 项目 Memory 与 Skill
 
-> 状态：#752 实现；同步日期：2026-10-21。代码、schema v60 和测试是事实入口。模型效果与生产试验结果需要独立记录，不能由状态机夹具推定。
+> 状态：#752 实现；同步日期：2026-10-21。代码、schema v61 和测试是事实入口。模型效果与生产试验结果需要独立记录，不能由状态机夹具推定。
 
 项目知识分为 Memory（有来源的简短事实）和 Skill（触发条件、步骤、输入输出、不适用边界）。两者有稳定身份、不可变版本和 active 指针。草稿、候选和评测资料不进入普通 Job 目录。
 
@@ -65,7 +65,7 @@ reviewer 与 maker/evaluator 必须不同 Job，绑定 proposal revision、输�
 
 运行 `pnpm ci:unit:project-knowledge`；设置独立 `TEST_DATABASE_URL` 后运行 `pnpm ci:integration:project-knowledge`。集成 helper 为每例创建临时数据库并套当前基线，不能指向业务默认数据库作为测试真相。
 
-schema 由 v59 升为 v60，使用基线重建。已在独立 PostgreSQL 16 容器执行 `pnpm db:rebuild -- --plan` / `--apply`，验证备份可恢复为 v59、列交集回填保留项目记录且目标为 v60。生产部署、生产库重建和长期模型效果试验均应在单独授权的环境进行。
+早期分支曾由 v59 升为 v60，使用基线重建；当时已在独立 PostgreSQL 16 容器执行 `pnpm db:rebuild -- --plan` / `--apply`，验证备份可恢复为 v59、列交集回填保留项目记录且目标为 v60。生产部署、生产库重建和长期模型效果试验均应在单独授权的环境进行。
 
 ### 2026-10-21 审查验收边界
 
@@ -76,3 +76,7 @@ schema 由 v59 升为 v60，使用基线重建。已在独立 PostgreSQL 16 容�
 本轮未调用付费模型、未接触业务数据。该最终试验需要独立空白 Linux Docker 主机、测试数据库、已准入不可变 runtime digest、仅测试用途的模型配置，以及明确的调用费用上限；凭据应通过已有 Model Gateway 配置，不能写入文档或证据。
 
 真实模型闭环的隔离驱动、预算限制与未完成验收说明见 [knowledge-live 准备入口](../agent-harness/knowledge-live/README.md)。该入口只经过离线验证；不代表已执行付费模型验收。
+
+集成 #758 后当前知识基线为 v61；main v60 的凭据来源规则与 `rebuild --reset-role-identity` 显式确认保持不变。知识表不复用凭据变更的版本号。
+
+本次集成以 main `5b0d9b1f` 的实际 v60 SQL 在全新隔离 PostgreSQL 16 库建立基线，运行 v61 rebuild apply（保留 staging）后复制 63 张表，核对项目记录、显式全局 CLI/model 保留及 9 张知识表建立；迁移套件 22/22、知识集成 24/24 通过。未操作生产库。
