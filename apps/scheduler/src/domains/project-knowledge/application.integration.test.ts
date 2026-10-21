@@ -129,6 +129,49 @@ test("maker proposal persists an isolated draft and rejects a forged assignment"
   });
 });
 
+test("needs_eval create revision keeps its draft identity and immutable previous candidate", async () => {
+  await withKnowledgeDatabase(async (db) => {
+    const folder = await mkdtemp(join(tmpdir(), "knowledge-create-revision-"));
+    setSharedAssetBlobStoreForTests(new LocalBlobStore(folder));
+    try {
+      const maker = await seedKnowledgeJob(db, undefined, ["propose_project_knowledge"]);
+      const [work] = await db`INSERT INTO project_knowledge_work(project_id,origin_job_id,canvas_id,trigger_key,state,stage,active_job_id,governance_hash)
+        VALUES(${maker.projectId},${maker.jobId},${maker.canvasId},${randomUUID()},'running','maker',${maker.jobId},${H}) RETURNING id`;
+      await db`INSERT INTO project_knowledge_job_assignments(job_id,project_id,work_id,stage)
+        VALUES(${maker.jobId},${maker.projectId},${work!.id},'maker')`;
+      const source = await attachFixtureSource(db, String(work!.id), maker.projectId);
+      const input = { work_ref: work!.id, action: "create", revision: 1, base_refs: [],
+        candidate: { kind: "memory", logical_key: "fixture/retry", title: "Retry", content: "first observation" },
+        source_refs: [source], reason: "first candidate", evaluation_plan: evaluationPlan() };
+      const app = createProjectKnowledgeApplication({ db, governanceHash: H });
+      const invoke = (body: unknown) => app.invoke({ jobId: maker.jobId, projectId: maker.projectId, canvasId: maker.canvasId,
+        operationId: "propose_project_knowledge", input: body, eventId: randomUUID(), tokenId: randomUUID(), idempotencyKey: randomUUID() });
+      const first = await invoke(input);
+      const [original] = await db`SELECT * FROM project_knowledge_versions WHERE id=${String(first.candidate_version_ref)}`;
+      await db`UPDATE project_knowledge_work SET stage='maker' WHERE id=${work!.id}`;
+      const revision = { ...input, revision: 2, parent_proposal_ref: first.proposal_ref,
+        candidate: { ...input.candidate, content: "corrected observation" } };
+      // Neither an in-flight parent nor an unparented retry may overwrite the draft.
+      await assert.rejects(invoke(revision), /preceding proposal/i);
+      await db`UPDATE project_knowledge_proposals SET state='needs_eval' WHERE id=${String(first.proposal_ref)}`;
+      await assert.rejects(invoke(input), /identity already exists/i);
+      const second = await invoke(revision);
+      assert.notEqual(second.candidate_version_ref, first.candidate_version_ref);
+      const versions = await db`SELECT id,item_id,version,content_sha256 FROM project_knowledge_versions ORDER BY version`;
+      assert.equal(versions.length, 2);
+      assert.equal(versions[0]!.item_id, versions[1]!.item_id);
+      assert.equal(Number(versions[1]!.version), 2);
+      assert.equal(versions[0]!.content_sha256, original!.content_sha256);
+      assert.notEqual(versions[1]!.content_sha256, original!.content_sha256);
+      const [item] = await db`SELECT status,active_version_id FROM project_knowledge_items WHERE id=${original!.item_id}`;
+      assert.equal(item!.status, "draft");
+      assert.equal(item!.active_version_id, null);
+      const [updated] = await db`SELECT revision_count FROM project_knowledge_work WHERE id=${work!.id}`;
+      assert.equal(updated!.revision_count, 1);
+    } finally { setSharedAssetBlobStoreForTests(null); await rm(folder, { recursive: true, force: true }); }
+  });
+});
+
 test("evaluator cannot settle unexecuted fixed cases", async () => {
   await withKnowledgeDatabase(async (db) => {
     const maker = await seedKnowledgeJob(db, undefined, ["propose_project_knowledge"]);

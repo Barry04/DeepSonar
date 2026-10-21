@@ -16,10 +16,12 @@ export async function proposeKnowledge(tx: KnowledgeDb, actor: KnowledgeActor, i
   if (assignment.governance_hash !== governanceHash) return reject("KNOWLEDGE_BASE_CONFLICT", "Governance baseline changed");
   if (Number(assignment.job_count) > 32 || Number(assignment.run_seconds) > 1800 || Number(assignment.revision_count) > 2)
     return reject("KNOWLEDGE_BUDGET_EXHAUSTED", "Knowledge work budget is exhausted");
+  let parentCandidateVersion: string | null = null;
   if (input.revision > 1) {
-    const [parent] = await tx`SELECT id,revision,work_id FROM project_knowledge_proposals WHERE id=${input.parent_proposal_ref ?? null}
+    const [parent] = await tx`SELECT id,revision,work_id,state,candidate_version_id FROM project_knowledge_proposals WHERE id=${input.parent_proposal_ref ?? null}
       AND project_id=${actor.projectId} AND work_id=${input.work_ref}`;
-    if (!parent || Number(parent.revision) + 1 !== input.revision || input.revision > 3) return reject("KNOWLEDGE_BASE_CONFLICT", "Revision must append to the preceding proposal");
+    if (!parent || parent.state !== "needs_eval" || Number(parent.revision) + 1 !== input.revision || input.revision > 3) return reject("KNOWLEDGE_BASE_CONFLICT", "Revision must append to the preceding proposal");
+    parentCandidateVersion = parent.candidate_version_id ? String(parent.candidate_version_id) : null;
     if (Number(assignment.revision_count) >= 2) return reject("KNOWLEDGE_BUDGET_EXHAUSTED", "Maximum candidate revisions reached");
   } else if (input.parent_proposal_ref) return reject("KNOWLEDGE_BASE_CONFLICT", "Initial proposal cannot have a parent");
 
@@ -54,11 +56,21 @@ export async function proposeKnowledge(tx: KnowledgeDb, actor: KnowledgeActor, i
     let itemId: string;
     let version = 1;
     if (input.action === "create") {
-      const [existing] = await tx`SELECT id FROM project_knowledge_items WHERE project_id=${actor.projectId} AND kind=${input.candidate.kind} AND logical_key=${input.candidate.logical_key}`;
-      if (existing) return reject("KNOWLEDGE_BASE_CONFLICT", "Logical knowledge identity already exists");
-      const [created] = await tx`INSERT INTO project_knowledge_items(project_id,kind,logical_key,title,keywords_json)
-        VALUES(${actor.projectId},${input.candidate.kind},${input.candidate.logical_key},${input.candidate.title},${tx.json(input.candidate.keywords)}) RETURNING id`;
-      itemId = String(created!.id);
+      const [existing] = await tx`SELECT id,status,active_version_id FROM project_knowledge_items WHERE project_id=${actor.projectId} AND kind=${input.candidate.kind} AND logical_key=${input.candidate.logical_key} FOR UPDATE`;
+      if (existing) {
+        // A needs_eval create revision owns its original isolated draft, not a new identity.
+        const [parentVersion] = await tx`SELECT item_id FROM project_knowledge_versions
+          WHERE id=${parentCandidateVersion} AND project_id=${actor.projectId}`;
+        if (!parentVersion || parentVersion.item_id !== existing.id || existing.status !== "draft" || existing.active_version_id)
+          return reject("KNOWLEDGE_BASE_CONFLICT", "Logical knowledge identity already exists");
+        itemId = String(existing.id);
+        const [number] = await tx`SELECT COALESCE(MAX(version),0)+1 AS next FROM project_knowledge_versions WHERE item_id=${itemId}`;
+        version = Number(number!.next);
+      } else {
+        const [created] = await tx`INSERT INTO project_knowledge_items(project_id,kind,logical_key,title,keywords_json)
+          VALUES(${actor.projectId},${input.candidate.kind},${input.candidate.logical_key},${input.candidate.title},${tx.json(input.candidate.keywords)}) RETURNING id`;
+        itemId = String(created!.id);
+      }
     } else {
       const target = bases.find((base) => base.item_id === input.base_refs[0]?.item_ref);
       if (!target) return reject("KNOWLEDGE_BASE_CONFLICT", "Candidate has no target identity");

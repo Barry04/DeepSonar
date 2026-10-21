@@ -1,6 +1,6 @@
 # 项目 Memory 与 Skill
 
-> 状态：#752 实现；同步日期：2026-10-20。代码、schema v60 和测试是事实入口。模型效果与生产试验结果需要独立记录，不能由状态机夹具推定。
+> 状态：#752 实现；同步日期：2026-10-21。代码、schema v60 和测试是事实入口。模型效果与生产试验结果需要独立记录，不能由状态机夹具推定。
 
 项目知识分为 Memory（有来源的简短事实）和 Skill（触发条件、步骤、输入输出、不适用边界）。两者有稳定身份、不可变版本和 active 指针。草稿、候选和评测资料不进入普通 Job 目录。
 
@@ -45,6 +45,8 @@ project、Job、Attempt、actor 和 assignment 均由平台推导，不接受请
 
 试验组按动作选择 without / baseline / candidate；每组独立 Job、Attempt 和 session。试验 Job 的常规项目知识目录与共享资产下发为空，只能读取该组分配的输入。固定覆盖 target、negative_trigger、missing_input、cross_project、coexistence、revocation。缺环境、缺证据、终态异常或未知外部效果保留 needs_eval/blocked，不能把说明文字当作执行成功。
 
+首次 create 候选进入 `needs_eval` 后，修订必须引用此前提案并沿用其隔离草稿身份，追加新版本；不能覆盖评测中的候选、其他工作链的草稿或已激活身份。旧版本正文与来源保持不变。
+
 预算为累计 32 Jobs、1800 秒、最多 2 次候选修订。工作领取短事务完成；创建与关联 Job 使用现有事务内创建原语，保持 Canvas → Job → work 的锁顺序。重启扫描已持久的 assignment 和 Job 终态；unknown/orphan 不自动重放。
 
 reviewer 与 maker/evaluator 必须不同 Job，绑定 proposal revision、输入 digest、来源、baseline generation 和治理 hash。全部硬门通过才切 active 指针。merge 的目标激活与来源 retire 在同一事务，冲突或拒绝保留旧 active。版本正文及 provenance 不可改写；revoke tombstone 不可清除。
@@ -64,3 +66,11 @@ reviewer 与 maker/evaluator 必须不同 Job，绑定 proposal revision、输�
 运行 `pnpm ci:unit:project-knowledge`；设置独立 `TEST_DATABASE_URL` 后运行 `pnpm ci:integration:project-knowledge`。集成 helper 为每例创建临时数据库并套当前基线，不能指向业务默认数据库作为测试真相。
 
 schema 由 v59 升为 v60，使用基线重建。已在独立 PostgreSQL 16 容器执行 `pnpm db:rebuild -- --plan` / `--apply`，验证备份可恢复为 v59、列交集回填保留项目记录且目标为 v60。生产部署、生产库重建和长期模型效果试验均应在单独授权的环境进行。
+
+### 2026-10-21 审查验收边界
+
+本轮在 main `c5a1e7e0` 基础上复查 #756，补齐 create 候选的同身份修订与 PostgreSQL 回归；并发 Scheduler 领取、重建 Scheduler 实例后的未知效果停止及累计预算耗尽都有可复跑数据库断言。测试入口仍为上述知识集成脚本，并由常规 CI 调用。
+
+这些测试使用合成任务/评测记录，证明存储、状态转换和权限硬门；不证明 LLM 能正确生成、独立评测或审查方法。专用授权烟测的固定模型响应也只能证明 Dispatcher/OpenSandbox/Control API 授权链路。完整模型验收仍须保存任务 A 的 maker → case×arm trial → evaluator → reviewer → 激活，以及任务 B 的精确版本使用 → 失败反馈 → 同身份修订的 Job/Attempt/Receipt/Evidence、模型版本、用量和退出码。完整链路未通过前不得据此关闭 #752 或宣称生产模型效果已验收。
+
+本轮未调用付费模型、未接触业务数据。该最终试验需要独立空白 Linux Docker 主机、测试数据库、已准入不可变 runtime digest、仅测试用途的模型配置，以及明确的调用费用上限；凭据应通过已有 Model Gateway 配置，不能写入文档或证据。

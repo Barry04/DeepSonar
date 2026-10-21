@@ -192,3 +192,46 @@ test("each required case arm is a separate trial Job; evaluator and reviewer wai
     assert.equal(await scheduler.tick(), 0);
   });
 });
+
+test("concurrent schedulers and a restart do not duplicate an assigned Job", async () => {
+  await withKnowledgeDatabase(async (db) => {
+    const fixture = await workFixture(db);
+    await Promise.all([schedulerFor(db).tick(), schedulerFor(db).tick()]);
+    assert.equal((await assigned(db, fixture.workId, "maker")).length, 1);
+    assert.equal(await schedulerFor(db).tick(), 0);
+    const [work] = await db`SELECT job_count FROM project_knowledge_work WHERE id=${fixture.workId}`;
+    assert.equal(work!.job_count, 1);
+  });
+});
+
+test("restart reconciles an orphan without repeating unknown effects", async () => {
+  await withKnowledgeDatabase(async (db) => {
+    const fixture = await workFixture(db);
+    await schedulerFor(db).tick();
+    const maker = (await assigned(db, fixture.workId, "maker"))[0]!;
+    // Simulate process loss after the Job terminal commit, before domain advancement.
+    await db`UPDATE jobs SET status='orphan',finished_at=now() WHERE id=${String(maker.job_id)}`;
+    const restarted = schedulerFor(db);
+    await restarted.tick();
+    const [work] = await db`SELECT state,reason,active_job_id FROM project_knowledge_work WHERE id=${fixture.workId}`;
+    assert.equal(work!.state, "blocked");
+    assert.equal(work!.reason, "unknown_external_effect");
+    assert.equal(work!.active_job_id, null);
+    assert.equal(await schedulerFor(db).tick(), 0);
+    assert.equal((await assigned(db, fixture.workId, "maker")).length, 1);
+  });
+});
+
+test("exhausted work budgets survive restart without creating another Job", async () => {
+  for (const budget of ["jobs", "seconds"] as const) await withKnowledgeDatabase(async (db) => {
+    const fixture = await workFixture(db);
+    await db`UPDATE project_knowledge_work SET job_count=${budget === "jobs" ? 32 : 0},
+      run_seconds=${budget === "seconds" ? 1800 : 0} WHERE id=${fixture.workId}`;
+    await schedulerFor(db).tick();
+    const [work] = await db`SELECT state,reason FROM project_knowledge_work WHERE id=${fixture.workId}`;
+    assert.equal(work!.state, "blocked");
+    assert.equal(work!.reason, budget === "jobs" ? "job_budget_exhausted" : "work_budget_exhausted");
+    assert.equal(await schedulerFor(db).tick(), 0);
+    assert.equal((await assigned(db, fixture.workId, "maker")).length, 0);
+  });
+});
