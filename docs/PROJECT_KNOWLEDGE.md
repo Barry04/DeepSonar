@@ -74,3 +74,5 @@ schema 由 v59 升为 v60，使用基线重建。已在独立 PostgreSQL 16 容�
 这些测试使用合成任务/评测记录，证明存储、状态转换和权限硬门；不证明 LLM 能正确生成、独立评测或审查方法。专用授权烟测的固定模型响应也只能证明 Dispatcher/OpenSandbox/Control API 授权链路。完整模型验收仍须保存任务 A 的 maker → case×arm trial → evaluator → reviewer → 激活，以及任务 B 的精确版本使用 → 失败反馈 → 同身份修订的 Job/Attempt/Receipt/Evidence、模型版本、用量和退出码。完整链路未通过前不得据此关闭 #752 或宣称生产模型效果已验收。
 
 本轮未调用付费模型、未接触业务数据。该最终试验需要独立空白 Linux Docker 主机、测试数据库、已准入不可变 runtime digest、仅测试用途的模型配置，以及明确的调用费用上限；凭据应通过已有 Model Gateway 配置，不能写入文档或证据。
+
+真实模型闭环的隔离驱动、预算限制与未完成验收说明见 [knowledge-live 准备入口](../agent-harness/knowledge-live/README.md)。该入口只经过离线验证；不代表已执行付费模型验收。
